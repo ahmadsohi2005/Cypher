@@ -20,7 +20,7 @@ export default function NetworkTool() {
     const [macAddress, setMacAddress] = useState('');
     const [cidrInput, setCidrInput] = useState('192.168.1.0/24');
 
-    const API_BASE = 'http://127.0.0.1:8000/api/network';
+    const API_BASE = import.meta.env.VITE_API_URL + '/api/network';
 
     // Reset states when switching tabs to prevent UI freeze
     useEffect(() => {
