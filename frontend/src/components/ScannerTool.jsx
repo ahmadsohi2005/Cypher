@@ -18,7 +18,7 @@ export default function ScannerTool() {
 
         try {
             const [basicResponse, advancedResponse] = await Promise.all([
-               axios.post(`${import.meta.env.VITE_API_URL}/api/scanner/url`, { url })
+               axios.post(`${import.meta.env.VITE_API_URL}/api/scanner/url`, { url }),
 axios.post(`${import.meta.env.VITE_API_URL}/api/scanner/advanced`, { url })
             ]);
 
