@@ -12,10 +12,14 @@ if sys.platform == "win32":
 
 app = FastAPI(title="Cybersecurity Toolkit API")
 
+origins = [ 
+    "http://localhost:5173", 
+]
+
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins during development
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

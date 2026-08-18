@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Shield, ShieldAlert, Activity, Search, FileText, ArrowLeft, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import NetworkTool from './components/networktool';
+import NetworkTool from './components/NetworkTool';
 import ScannerTool from './components/ScannerTool';
 import OsintTool from './components/OsintTool';
 
