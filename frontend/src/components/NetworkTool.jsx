@@ -20,7 +20,10 @@ export default function NetworkTool() {
     const [macAddress, setMacAddress] = useState('');
     const [cidrInput, setCidrInput] = useState('192.168.1.0/24');
 
-    const API_BASE = import.meta.env.VITE_API_URL + '/api/network';
+    // Dynamic API routing for Vercel vs Localhost
+    const API_BASE = import.meta.env.VITE_API_BASE_URL
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/network`
+        : 'http://127.0.0.1:8000/api/network';
 
     // Reset states when switching tabs to prevent UI freeze
     useEffect(() => {
@@ -73,7 +76,8 @@ export default function NetworkTool() {
                     { id: 'dns', label: 'DNS Lookup' },
                     { id: 'whois', label: 'WHOIS Lookup' },
                     { id: 'mac', label: 'MAC Profiler' },
-                    { id: 'subnet', label: 'Subnet Calc' }
+                    { id: 'subnet', label: 'Subnet Calc' },
+                    { id: 'ssl', label: 'SSL Inspector' }
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -206,6 +210,16 @@ export default function NetworkTool() {
                     </div>
                 )}
 
+                {/* 9. SSL INSPECTOR */}
+                {subTab === 'ssl' && (
+                    <div className="flex gap-3">
+                        <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Domain (e.g., github.com)" className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none" />
+                        <button onClick={() => executeAction('ssl-check', { target })} disabled={loading || !target} className="px-6 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors">
+                            {loading ? 'Inspecting...' : 'Check SSL'}
+                        </button>
+                    </div>
+                )}
+
             </div>
 
             {/* Notifications & Output */}
@@ -269,8 +283,11 @@ export default function NetworkTool() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {results.open_ports.map((port, idx) => (
                                         <div key={idx} className="p-4 bg-slate-900 rounded border border-slate-800">
-                                            <div className="flex justify-between mb-2">
-                                                <span className="font-mono font-bold text-blue-400">Port {port.port}</span>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <div className="flex flex-col">
+                                                    <span className="font-mono font-bold text-blue-400">Port {port.port}</span>
+                                                    <span className="text-[10px] uppercase tracking-wider text-slate-500">{port.service || 'UNKNOWN'}</span>
+                                                </div>
                                                 <span className="text-xs px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded">OPEN</span>
                                             </div>
                                             <span className="text-xs text-slate-400 font-mono break-all">{port.banner}</span>
@@ -414,6 +431,42 @@ export default function NetworkTool() {
                                         <div className="p-5 bg-slate-900 rounded-lg border border-slate-800 flex flex-col justify-center">
                                             <span className="text-xs text-slate-500 uppercase tracking-wider block mb-1">Total Usable Hosts</span>
                                             <span className="text-white font-bold text-3xl">{results.total_hosts.toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* SSL Result */}
+                        {subTab === 'ssl' && results && (
+                            <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
+                                <h4 className="text-lg font-bold text-white mb-4">TLS/SSL Certificate Details</h4>
+                                {results.error ? (
+                                    <p className="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-500/20">{results.error}</p>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="p-4 bg-slate-900 rounded border border-slate-800">
+                                            <span className="text-xs text-slate-500 uppercase block mb-1">Target Domain</span>
+                                            <span className="text-white font-mono">{results.domain}</span>
+                                        </div>
+                                        <div className="p-4 bg-slate-900 rounded border border-slate-800">
+                                            <span className="text-xs text-slate-500 uppercase block mb-1">Certificate Authority (Issuer)</span>
+                                            <span className="text-blue-400 font-semibold">{results.issuer}</span>
+                                        </div>
+                                        <div className="p-4 bg-slate-900 rounded border border-slate-800">
+                                            <span className="text-xs text-slate-500 uppercase block mb-1">Expiration Date</span>
+                                            <span className="text-white font-mono">{results.expiry}</span>
+                                        </div>
+                                        <div className="p-4 bg-slate-900 rounded border border-slate-800 flex items-center justify-between">
+                                            <div>
+                                                <span className="text-xs text-slate-500 uppercase block mb-1">Validity Status</span>
+                                                <span className={`text-xl font-black ${results.valid ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {results.days_left} Days Left
+                                                </span>
+                                            </div>
+                                            <div className={`p-2 rounded-full ${results.valid ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                                                {results.valid ? '✅' : '🚨'}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
