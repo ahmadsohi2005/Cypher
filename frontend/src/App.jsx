@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import NetworkTool from './components/NetworkTool';
 import ScannerTool from './components/ScannerTool';
 import OsintTool from './components/OsintTool';
+import LogAnalyzer from './components/LogAnalyzer';
 
 export default function App() {
   const [activeTool, setActiveTool] = useState(null);
@@ -46,7 +47,7 @@ export default function App() {
     {
       id: 'logs', name: 'Log Analyzer', icon: FileText,
       color: 'text-emerald-500', bg: 'bg-emerald-500/10',
-      desc: 'Parse and visualize server logs and More', status: 'locked'
+      desc: 'Parse and visualize server logs and More', status: 'active'
     }
   ];
 
@@ -152,6 +153,7 @@ export default function App() {
                 {activeTool === 'network' && <NetworkTool />}
                 {activeTool === 'scanner' && <ScannerTool />}
                 {activeTool === 'osint' && <OsintTool />}
+                {activeTool === 'logs' && <LogAnalyzer />}
               </div>
             </motion.div>
           )}
