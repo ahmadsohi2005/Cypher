@@ -115,25 +115,26 @@ async def async_port_scan(target: str, ports: list) -> list:
     return results
 
 # --- 4. CLOUD-SAFE TRACEROUTE ---
-def sync_traceroute(host: str) -> list:
-    is_win = platform.system().lower() == 'windows'
-    # -h 10 restricts hops, -w 100 sets a fast 100ms timeout per hop
-    cmd = ['tracert', '-d', '-h', '10', '-w', '100', host] if is_win else ['traceroute', '-n', '-m', '10', '-w', '1', host]
-    
-    try:
-        process = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-        hops = [line.strip() for line in process.stdout.splitlines() if line.strip() and not line.startswith("Tracing")]
-        return hops if hops else ["Traceroute failed to route path."]
-    except subprocess.TimeoutExpired:
-        return ["Traceroute timed out. The host may be dropping ICMP packets."]
-    except Exception as e:
-        return [f"Execution error: {str(e)}"]
-
-
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
-    return await asyncio.to_thread(sync_traceroute, clean_host)
+    
+    def fetch_mtr():
+        try:
+            # We use HackerTarget's free API to bypass Render's ICMP firewall
+            url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
+            response = requests.get(url, timeout=15)
+            
+            if response.status_code == 200:
+                # Split the raw text response into an array of lines for the frontend
+                lines = response.text.split('\n')
+                return [line for line in lines if line.strip()]
+            else:
+                return ["Error: Could not reach the traceroute routing server."]
+        except Exception as e:
+            return [f"Execution error: {str(e)}"]
 
+    return await asyncio.to_thread(fetch_mtr)
+    
 # --- DNS LOOKUP ---
 def sync_dns_lookup(domain: str) -> dict:
     clean_domain = sanitize_target(domain)
