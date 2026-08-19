@@ -28,9 +28,9 @@ export default function LogAnalyzer() {
     const [results, setResults] = useState(null);
     const [error, setError] = useState('');
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/logs`
-        : 'http://127.0.0.1:8000/api/logs';
+   // Replace your current API_BASE logic with this:
+    const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
+    const API_BASE = `${BASE_URL}/api/logs`;
 
     const handleAnalyze = async () => {
         if (!rawLogs.trim()) return;
