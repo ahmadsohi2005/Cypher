@@ -21,9 +21,9 @@ export default function OsintTool() {
         setResults(null);
 
         // This ensures it works on both localhost and Vercel
-        const API_BASE = import.meta.env.VITE_API_BASE_URL
-            ? `${import.meta.env.VITE_API_BASE_URL}/api/osint`
-            : 'http://127.0.0.1:8000/api/osint';
+        // Replace your current API_BASE logic inside runOsintScan with this:
+    const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
+    const API_BASE = `${BASE_URL}/api/osint`;
 
         try {
             const response = await axios.post(`${API_BASE}/scan`, {
