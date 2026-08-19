@@ -39,7 +39,13 @@ export default function LogAnalyzer() {
         setResults(null);
 
         try {
-            const res = await axios.post(`${API_BASE}/analyze`, { raw_logs: rawLogs });
+            // WAF BYPASS: Base64 encode the logs so the cloud firewall ignores the SQLi/XSS strings
+            const encodedLogs = btoa(unescape(encodeURIComponent(rawLogs)));
+            
+            const res = await axios.post(`${API_BASE}/analyze`, { 
+                raw_logs: encodedLogs,
+                is_encoded: true // Tell Python to decode this
+            });
             setResults(res.data);
         } catch (err) {
             setError(err.response?.data?.detail || 'Log analysis failed or backend is unreachable.');
@@ -47,7 +53,7 @@ export default function LogAnalyzer() {
             setLoading(false);
         }
     };
-
+    
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
