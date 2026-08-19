@@ -262,21 +262,25 @@ export default function NetworkTool() {
 
                         {/* Sweep Result */}
                         {subTab === 'sweep' && results.active_hosts && (
-                            <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
-                                <h4 className="text-lg font-bold text-white mb-4">Active Hosts: {results.active_hosts.length}</h4>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    {results.active_hosts.map((host, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 p-3 bg-slate-900 rounded border border-slate-800">
-                                            <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                            <span className="font-mono text-sm text-slate-300">{host.host}</span>
-                                        </div>
-                                <p className="text-xs text-yellow-400 mb-3">
-  Note: Because this tool is cloud-hosted, scanning private ranges (like 192.168.x.x) will sweep the server's internal network, not your local connection.
-</p>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+    <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
+        <h4 className="text-lg font-bold text-white mb-4">Active Hosts: {results.active_hosts.length}</h4>
+        
+        {/* The Map Loop Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {results.active_hosts.map((host, idx) => (
+                <div key={idx} className="flex items-center gap-2 p-3 bg-slate-900 rounded border border-slate-800">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                    <span className="font-mono text-sm text-slate-300">{host.host}</span>
+                </div>
+            ))}
+        </div>
+
+        {/* The Note placed safely outside the loop */}
+        <p className="text-xs text-yellow-400">
+            Note: Because this tool is cloud-hosted, scanning private ranges (like 192.168.x.x) will sweep the server's internal network, not your local connection.
+        </p>
+    </div>
+)}
 
                         {/* Port Result */}
                         {subTab === 'ports' && results.open_ports && (
