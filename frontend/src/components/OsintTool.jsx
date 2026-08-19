@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import LoadingSpinner from './LoadingSpinner';
+import { saveActivity } from '../utils/historyManager';
 
 export default function OsintTool() {
     const [target, setTarget] = useState('');
@@ -21,9 +22,9 @@ export default function OsintTool() {
         setResults(null);
 
         // This ensures it works on both localhost and Vercel
-        // Replace your current API_BASE logic inside runOsintScan with this:
-    const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
-    const API_BASE = `${BASE_URL}/api/osint`;
+        const API_BASE = import.meta.env.VITE_API_BASE_URL
+            ? `${import.meta.env.VITE_API_BASE_URL}/api/osint`
+            : 'http://127.0.0.1:8000/api/osint';
 
         try {
             const response = await axios.post(`${API_BASE}/scan`, {
@@ -31,6 +32,17 @@ export default function OsintTool() {
                 target_type: targetType
             });
             setResults(response.data);
+            saveActivity({
+                module: 'OSINT',
+                action: `${targetType.charAt(0).toUpperCase() + targetType.slice(1)} Recon`,
+                target: target.trim(),
+                summary: response.data.breaches?.exposed_data?.length > 0 
+                    ? `Compromised leaks found: ${response.data.breaches.exposed_data.join(', ')}`
+                    : response.data.threatfox?.malware_hits > 0
+                        ? `Malware hits detected: ${response.data.threatfox.malware_hits}`
+                        : 'Intel gathered successfully',
+                fullResult: response.data
+            });
         } catch (err) {
             setError(err.response?.data?.detail || 'An error occurred while fetching OSINT data.');
         } finally {
