@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import LoadingSpinner from './LoadingSpinner';
+import { saveActivity } from '../utils/historyManager';
 
 export default function ScannerTool() {
     const [url, setUrl] = useState('');
@@ -18,12 +19,24 @@ export default function ScannerTool() {
 
         try {
             const [basicResponse, advancedResponse] = await Promise.all([
-               axios.post(`${import.meta.env.VITE_API_URL}/api/scanner/url`, { url }),
-axios.post(`${import.meta.env.VITE_API_URL}/api/scanner/advanced`, { url })
+                axios.post('http://127.0.0.1:8000/api/scanner/url', { url }),
+                axios.post('http://127.0.0.1:8000/api/scanner/advanced', { url })
             ]);
 
             setResults(basicResponse.data);
             setAdvancedResults(advancedResponse.data);
+
+            const vtMalicious = basicResponse.data.virustotal?.stats?.malicious || 0;
+            const isPhishing = advancedResponse.data.phishing?.status === 'malicious';
+            const riskLevel = (vtMalicious > 5 || isPhishing) ? 'CRITICAL' : (vtMalicious > 0) ? 'SUSPICIOUS' : 'SAFE';
+
+            saveActivity({
+                module: 'URL Scanner',
+                action: 'URL Analysis',
+                target: url,
+                summary: `Threat Scan complete. Verdict: ${riskLevel} (${vtMalicious} malicious hits)`,
+                fullResult: { basic: basicResponse.data, advanced: advancedResponse.data }
+            });
         } catch (err) {
             setError(err.response?.data?.detail || 'An error occurred during scanning. The server might be unreachable.');
         } finally {
