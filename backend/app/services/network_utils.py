@@ -115,25 +115,25 @@ async def async_port_scan(target: str, ports: list) -> list:
     return results
 
 # --- 4. CLOUD-SAFE TRACEROUTE ---
-async def async_traceroute(target: str) -> list:
-    clean_host = sanitize_target(target)
+# async def async_traceroute(target: str) -> list:
+#     clean_host = sanitize_target(target)
     
-    def fetch_mtr():
-        try:
-            # We use HackerTarget's free API to bypass Render's ICMP firewall
-            url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
-            response = requests.get(url, timeout=15)
+#     def fetch_mtr():
+#         try:
+#             # We use HackerTarget's free API to bypass Render's ICMP firewall
+#             url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
+#             response = requests.get(url, timeout=15)
             
-            if response.status_code == 200:
-                # Split the raw text response into an array of lines for the frontend
-                lines = response.text.split('\n')
-                return [line for line in lines if line.strip()]
-            else:
-                return ["Error: Could not reach the traceroute routing server."]
-        except Exception as e:
-            return [f"Execution error: {str(e)}"]
+#             if response.status_code == 200:
+#                 # Split the raw text response into an array of lines for the frontend
+#                 lines = response.text.split('\n')
+#                 return [line for line in lines if line.strip()]
+#             else:
+#                 return ["Error: Could not reach the traceroute routing server."]
+#         except Exception as e:
+#             return [f"Execution error: {str(e)}"]
 
-    return await asyncio.to_thread(fetch_mtr)
+#     return await asyncio.to_thread(fetch_mtr)
     
 # --- DNS LOOKUP ---
 def sync_dns_lookup(domain: str) -> dict:
