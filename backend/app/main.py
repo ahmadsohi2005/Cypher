@@ -22,8 +22,8 @@ origins = [
 # Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],  # Allows all origins (Vercel, Localhost, 127.0.0.1)
+    allow_credentials=False, # Must be False when origins is "*"
     allow_methods=["*"],
     allow_headers=["*"],
 )
