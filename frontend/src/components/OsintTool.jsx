@@ -19,8 +19,14 @@ export default function OsintTool() {
         setLoading(true);
         setError('');
         setResults(null);
+
+        // This ensures it works on both localhost and Vercel
+        const API_BASE = import.meta.env.VITE_API_BASE_URL
+            ? `${import.meta.env.VITE_API_BASE_URL}/api/osint`
+            : 'http://127.0.0.1:8000/api/osint';
+
         try {
-            const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/osint/scan`, {
+            const response = await axios.post(`${API_BASE}/scan`, {
                 target: target.trim(),
                 target_type: targetType
             });
@@ -96,21 +102,40 @@ export default function OsintTool() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                         {/* DEEP EMAIL BREACH ANALYTICS */}
-                        {targetType === 'email' && results.breaches && (
-                            <div className={`col-span-1 md:col-span-2 p-6 border rounded-xl ${results.breaches.exposed_data?.length > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
-                                <h3 className={`text-xl font-black mb-3 ${results.breaches.exposed_data?.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {results.breaches.exposed_data?.length > 0 ? '🚨 Sensitive Data Exposed in Leaks' : '✅ No Known Breaches Found'}
-                                </h3>
-                                {results.breaches.exposed_data?.length > 0 && (
-                                    <div>
-                                        <p className="text-slate-300 text-sm mb-3">The following data categories were compromised:</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {results.breaches.exposed_data.map((item, idx) => (
-                                                <span key={idx} className="px-3 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded font-bold text-sm">
-                                                    {item}
-                                                </span>
-                                            ))}
-                                        </div>
+                        {targetType === 'email' && (
+                            <div className="col-span-1 md:col-span-2 space-y-4">
+                                {/* New Phishing Heuristics Block */}
+                                {results.heuristics && (
+                                    <div className={`p-6 border rounded-xl ${results.heuristics.risk_level === 'High' ? 'bg-yellow-500/10 border-yellow-500/30' : 'bg-slate-900 border-slate-800'}`}>
+                                        <h3 className={`text-xl font-black mb-3 ${results.heuristics.risk_level === 'High' ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                            {results.heuristics.risk_level === 'High' ? '⚠️ Phishing Indicators Detected' : '✅ No Obvious Phishing Patterns'}
+                                        </h3>
+                                        {results.heuristics.warnings?.length > 0 && (
+                                            <ul className="list-disc pl-5 text-sm text-yellow-300 space-y-1">
+                                                {results.heuristics.warnings.map((warn, idx) => <li key={idx}>{warn}</li>)}
+                                            </ul>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Existing Breaches Block */}
+                                {results.breaches && (
+                                    <div className={`p-6 border rounded-xl ${results.breaches.exposed_data?.length > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-emerald-500/10 border-emerald-500/30'}`}>
+                                        <h3 className={`text-xl font-black mb-3 ${results.breaches.exposed_data?.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                            {results.breaches.exposed_data?.length > 0 ? '🚨 Sensitive Data Exposed in Leaks' : '✅ No Known Breaches Found'}
+                                        </h3>
+                                        {results.breaches.exposed_data?.length > 0 && (
+                                            <div>
+                                                <p className="text-slate-300 text-sm mb-3">The following data categories were compromised:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {results.breaches.exposed_data.map((item, idx) => (
+                                                        <span key={idx} className="px-3 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded font-bold text-sm">
+                                                            {item}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -143,6 +168,37 @@ export default function OsintTool() {
                                         <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Meta Description</span>
                                         <p className="text-slate-300 text-sm bg-slate-900 p-3 border border-slate-800 rounded-lg italic">{results.scraper.description}</p>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* THREAT INTELLIGENCE SCORING */}
+                        {(targetType === 'ip' || targetType === 'domain') && (
+                            <div className="p-5 border border-slate-800 rounded-xl bg-slate-950 md:col-span-2">
+                                <h3 className="text-lg font-bold mb-4 text-white flex items-center gap-2">
+                                    🛡️ Threat Reputation
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* ThreatFox Malware Hits */}
+                                    {results.threatfox && (
+                                        <div className={`p-4 rounded-lg border ${results.threatfox.malware_hits > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-900 border-slate-800'}`}>
+                                            <span className="text-xs text-slate-400 block uppercase font-semibold mb-1">Malware Indicators (ThreatFox)</span>
+                                            <span className={`text-2xl font-black ${results.threatfox.malware_hits > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {results.threatfox.malware_hits} Hits
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* AbuseIPDB Score (IP Only) */}
+                                    {targetType === 'ip' && results.abuseipdb && results.abuseipdb.status === 'success' && (
+                                        <div className={`p-4 rounded-lg border ${results.abuseipdb.abuse_score > 20 ? 'bg-orange-500/10 border-orange-500/30' : 'bg-slate-900 border-slate-800'}`}>
+                                            <span className="text-xs text-slate-400 block uppercase font-semibold mb-1">Abuse Score (AbuseIPDB)</span>
+                                            <span className={`text-2xl font-black ${results.abuseipdb.abuse_score > 20 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                                {results.abuseipdb.abuse_score}/100
+                                            </span>
+                                            <p className="text-xs text-slate-500 mt-1">From {results.abuseipdb.total_reports} recent reports</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -207,6 +263,23 @@ export default function OsintTool() {
                                     {results.subdomains.subdomains?.map((sub, idx) => (
                                         <div key={idx} className="p-2 bg-slate-900 border border-slate-800 rounded text-sm text-slate-300 font-mono truncate shadow-sm">
                                             {sub}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* HISTORICAL WAYBACK URLS */}
+                        {targetType === 'domain' && results.archived_urls && results.archived_urls.status === 'success' && (
+                            <div className="p-5 border border-slate-800 rounded-xl bg-slate-950">
+                                <h3 className="text-lg font-bold mb-2 text-white flex items-center gap-2">
+                                    🏛️ Archived Endpoints
+                                </h3>
+                                <p className="text-sm text-slate-400 mb-3">Found {results.archived_urls.count} historical URLs via Wayback Machine.</p>
+                                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-2">
+                                    {results.archived_urls.urls?.map((url, idx) => (
+                                        <div key={idx} className="p-2 bg-slate-900 border border-slate-800 rounded text-xs text-slate-300 font-mono truncate shadow-sm hover:text-blue-400 cursor-pointer" onClick={() => window.open(url, '_blank')}>
+                                            {url}
                                         </div>
                                     ))}
                                 </div>
