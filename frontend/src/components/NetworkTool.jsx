@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import LoadingSpinner from './LoadingSpinner';
+import { saveActivity } from '../utils/historyManager';
 
 export default function NetworkTool() {
     const [subTab, setSubTab] = useState('ping');
@@ -21,8 +22,10 @@ export default function NetworkTool() {
     const [cidrInput, setCidrInput] = useState('192.168.1.0/24');
 
     // Dynamic API routing for Vercel vs Localhost
-   const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
-    const API_BASE = `${BASE_URL}/api/network`;
+    const API_BASE = import.meta.env.VITE_API_BASE_URL
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/network`
+        : 'http://127.0.0.1:8000/api/network';
+
     // Reset states when switching tabs to prevent UI freeze
     useEffect(() => {
         setLoading(false);
@@ -39,6 +42,13 @@ export default function NetworkTool() {
                 timeout: 25000
             });
             setResults(response.data);
+            saveActivity({
+                module: 'Network',
+                action: subTab.toUpperCase(),
+                target: target || baseIp || macAddress || cidrInput,
+                summary: 'Diagnostics completed successfully',
+                fullResult: response.data
+            });
         } catch (err) {
             if (err.code === 'ECONNABORTED') {
                 setError('The scan timed out. The target network is too slow or dropping packets.');
@@ -470,7 +480,6 @@ export default function NetworkTool() {
                                 )}
                             </div>
                         )}
-
                     </motion.div>
                 )}
             </AnimatePresence>
