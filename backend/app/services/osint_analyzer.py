@@ -3,11 +3,45 @@ import asyncio
 from datetime import datetime
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
-import os
+import os, re
 
 load_dotenv()
 
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
+
+def clean_osint_target(target: str, target_type: str) -> str:
+    """Strips protocols and paths so APIs get clean domains."""
+    target = target.strip().lower()
+    if target_type == "domain":
+        # Remove http://, https://, www. and trailing paths
+        cleaned = re.sub(r"^(https?://)?(www\.)?", "", target)
+        return cleaned.split('/')[0]
+    return target
+
+def analyze_email_heuristics(email: str) -> dict:
+    """Checks for disposable domains and phishing keywords."""
+    if '@' not in email:
+        return {"risk_level": "Low", "warnings": []}
+        
+    local_part, domain = email.split('@', 1)
+    
+    # Common red flags used by threat actors
+    suspicious_keywords = ['update', 'verify', 'support', 'billing', 'secure', 'alert', 'account', 'admin', 'login']
+    disposable_domains = ['tempmail.com', '10minutemail.com', 'guerrillamail.com', 'mailinator.com', 'yopmail.com']
+    
+    risk_factors = []
+    
+    if domain in disposable_domains:
+        risk_factors.append("Disposable/Temporary email domain detected.")
+        
+    for keyword in suspicious_keywords:
+        if keyword in local_part or keyword in domain:
+            risk_factors.append(f"Suspicious keyword found: '{keyword}'")
+            
+    return {
+        "risk_level": "High" if risk_factors else "Low",
+        "warnings": risk_factors
+    }
 
 # --- 1. UPGRADED EMAIL ANALYTICS ---
 async def get_breach_analytics(email: str) -> dict:
@@ -155,13 +189,22 @@ async def get_archived_endpoints(domain: str) -> dict:
             return {"status": "failed"}
 
 # --- AUTOMATED THREAT BRIEFING ---
+# Replace your existing generate_markdown_report function with this updated version:
+
 def generate_markdown_report(target: str, data: dict, target_type: str) -> str:
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     report = f"# OSINT Threat Briefing: {target}\n**Generated:** {timestamp}\n\n"
     
     if target_type == "email":
         breach = data.get("breaches", {})
-        report += "## Email Analytics\n"
+        heuristics = data.get("heuristics", {})
+        
+        report += "## Email Threat Analytics\n"
+        if heuristics.get("risk_level") == "High":
+            report += "**WARNING:** Suspicious phishing patterns detected.\n"
+            for w in heuristics.get("warnings", []):
+                report += f"- {w}\n"
+        
         exposed_data = breach.get("exposed_data", [])
         if exposed_data:
             report += f"**CRITICAL:** Data exposed in leaks.\n"
@@ -171,6 +214,13 @@ def generate_markdown_report(target: str, data: dict, target_type: str) -> str:
             
     elif target_type == "ip":
         geo = data.get("geolocation", {})
+        abuse = data.get("abuseipdb", {})
+        threatfox = data.get("threatfox", {})
+        
+        report += "## Threat Intelligence\n"
+        report += f"- **AbuseIPDB Score:** {abuse.get('abuse_score', 0)}/100 (Based on {abuse.get('total_reports', 0)} reports)\n"
+        report += f"- **Known Malware Hits:** {threatfox.get('malware_hits', 0)}\n\n"
+        
         report += "## IP Infrastructure\n"
         report += f"- **Location:** {geo.get('city', 'Unknown')}, {geo.get('country', 'Unknown')}\n"
         report += f"- **ISP/Org:** {geo.get('isp', 'Unknown')} (ASN: {geo.get('asn', 'Unknown')})\n"
@@ -181,6 +231,10 @@ def generate_markdown_report(target: str, data: dict, target_type: str) -> str:
         scraper = data.get("scraper", {})
         whois = data.get("whois", {})
         dns = data.get("dns", {})
+        threatfox = data.get("threatfox", {})
+        
+        report += "## Threat Intelligence\n"
+        report += f"- **Known Malware Hits:** {threatfox.get('malware_hits', 0)}\n\n"
         
         report += "## Infrastructure Recon\n"
         report += f"- **Expiration Date:** {whois.get('expiration', 'Unknown')}\n"
@@ -196,12 +250,15 @@ def generate_markdown_report(target: str, data: dict, target_type: str) -> str:
 
 # --- MASTER ORCHESTRATOR ---
 async def run_osint_scan(target: str, target_type: str) -> dict:
+    # CLEAN THE TARGET FIRST
+    target = clean_osint_target(target, target_type)
+    
     results = {}
     tasks = []
     
     if target_type == "email":
-        # Fixed function call
         results["breaches"] = await get_breach_analytics(target)
+        results["heuristics"] = analyze_email_heuristics(target)
         
     elif target_type == "ip":
         tasks = [check_threatfox(target), check_abuseipdb(target), get_ip_geolocation(target)]
@@ -209,7 +266,6 @@ async def run_osint_scan(target: str, target_type: str) -> dict:
         results["threatfox"], results["abuseipdb"], results["geolocation"] = gathered
         
     elif target_type == "domain":
-        # Added new DNS and WHOIS functions to the task runner
         tasks = [
             check_threatfox(target), 
             enumerate_subdomains(target), 
