@@ -109,7 +109,7 @@ async def async_port_scan(target: str, ports: list) -> list:
         results.extend([res for res in chunk_results if res["status"] == "open"])
         
     return results
-# TRACEROUTE
+    
 # TRACEROUTE
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
@@ -117,11 +117,18 @@ async def async_traceroute(target: str) -> list:
     def fetch_trace():
         import requests
         try:
-            # Outsourcing traceroute to bypass Render's OS limitations
             url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
             response = requests.get(url, timeout=15)
+            
+            # Catch the API rate limit or key error
+            if "error" in response.text.lower() or "valid key required" in response.text.lower():
+                return [
+                    f"Traceroute to {clean_host} [API Rate Limited]",
+                    "Error: The cloud server's shared IP has exhausted its free third-party API quota.",
+                    "Please try again later or run the toolkit locally for unrestricted routing."
+                ]
+                
             if response.status_code == 200:
-                # Split the text response into a clean list of hops
                 return response.text.splitlines()
             return ["Failed to retrieve traceroute data from API."]
         except Exception as e:
