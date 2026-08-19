@@ -110,21 +110,23 @@ async def async_port_scan(target: str, ports: list) -> list:
         
     return results
 # TRACEROUTE
+def sync_traceroute(host: str) -> list:
+    is_win = platform.system().lower() == 'windows'
+    # -h 10 restricts hops, -w 100 sets a fast 100ms timeout per hop
+    cmd = ['tracert', '-d', '-h', '10', '-w', '100', host] if is_win else ['traceroute', '-n', '-m', '10', '-w', '1', host]
+    
+    try:
+        process = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        hops = [line.strip() for line in process.stdout.splitlines() if line.strip() and not line.startswith("Tracing")]
+        return hops if hops else ["Traceroute failed to route path."]
+    except subprocess.TimeoutExpired:
+        return ["Traceroute timed out. The host may be dropping ICMP packets."]
+    except Exception as e:
+        return [f"Execution error: {str(e)}"]
+
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
-    
-    def fetch_trace():
-        try:
-            url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
-            response = requests.get(url, timeout=15)
-            if response.status_code == 200:
-                # Split the text response into a list of hops
-                return response.text.splitlines()
-            return ["Failed to retrieve traceroute data from API."]
-        except Exception as e:
-            return [f"Execution error: {str(e)}"]
-            
-    return await asyncio.to_thread(fetch_trace)
+    return await asyncio.to_thread(sync_traceroute, clean_host)
     # DNS LOOKUP
 def sync_dns_lookup(domain: str) -> dict:
     """Synchronous DNS lookup designed to run safely in a thread."""
