@@ -11,16 +11,24 @@ export default function ScannerTool() {
     const [advancedResults, setAdvancedResults] = useState(null);
     const [error, setError] = useState('');
 
+    // Dynamic API routing for Vercel vs Localhost
+    const API_BASE = import.meta.env.VITE_API_BASE_URL
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/scanner`
+        : 'http://127.0.0.1:8000/api/scanner';
+
     const scanUrl = async () => {
         setLoading(true);
         setError('');
         setResults(null);
         setAdvancedResults(null);
 
-        try {
+       try {
             const [basicResponse, advancedResponse] = await Promise.all([
-                axios.post('http://127.0.0.1:8000/api/scanner/url', { url }),
-                axios.post('http://127.0.0.1:8000/api/scanner/advanced', { url })
+                // axios.post('http://127.0.0.1:8000/api/scanner/url', { url }),
+                // axios.post('http://127.0.0.1:8000/api/scanner/advanced', { url })
+                axios.post(`${API_BASE}/url`, { url }),
+                axios.post(`${API_BASE}/advanced`, { url })
+                
             ]);
 
             setResults(basicResponse.data);
