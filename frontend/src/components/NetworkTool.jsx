@@ -121,6 +121,9 @@ export default function NetworkTool() {
                 {/* 2. SWEEP */}
                 {subTab === 'sweep' && (
                     <div className="flex flex-col gap-4">
+                        <p className="text-xs text-yellow-400 mb-3">
+  Note: Because this tool is cloud-hosted, scanning private ranges (like 192.168.x.x) will sweep the server's internal network, not your local connection.
+</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <input type="text" value={baseIp} onChange={(e) => setBaseIp(e.target.value)} placeholder="Base IP (e.g., 192.168.1.)" className="p-3 bg-slate-950 border border-slate-700 rounded-lg text-white" />
                             <input type="number" value={startIp} onChange={(e) => setStartIp(Number(e.target.value))} placeholder="Start" className="p-3 bg-slate-950 border border-slate-700 rounded-lg text-white" />
