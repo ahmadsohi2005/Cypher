@@ -21,10 +21,8 @@ export default function NetworkTool() {
     const [cidrInput, setCidrInput] = useState('192.168.1.0/24');
 
     // Dynamic API routing for Vercel vs Localhost
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/network`
-        : 'http://127.0.0.1:8000/api/network';
-
+   const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
+    const API_BASE = `${BASE_URL}/api/network`;
     // Reset states when switching tabs to prevent UI freeze
     useEffect(() => {
         setLoading(false);
