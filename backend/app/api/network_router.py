@@ -66,3 +66,7 @@ async def get_mac_vendor(req: MacRequest):
 @router.post("/subnet-calc")
 async def get_subnet_details(req: SubnetRequest):
     return network_utils.calculate_subnet(req.cidr)
+
+@router.post("/ssl-check")
+async def check_ssl(req: TargetRequest):
+    return await network_utils.async_ssl_check(req.target)
