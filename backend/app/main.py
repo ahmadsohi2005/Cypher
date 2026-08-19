@@ -16,6 +16,7 @@ app = FastAPI(title="Cybersecurity Toolkit API")
 
 origins = [ 
     "http://localhost:5173", 
+    "https://cypher-1d7g-gamma.vercel.app"
 ]
 
 # Enable CORS for React frontend
