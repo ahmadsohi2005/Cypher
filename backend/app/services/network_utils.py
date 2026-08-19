@@ -11,6 +11,8 @@ import asyncio
 import os
 import httpx
 from dotenv import load_dotenv
+import requests
+import concurrent.futures
 
 load_dotenv()
 MAC_API_KEY = os.getenv("MAC_API_KEY")
@@ -30,35 +32,48 @@ def sanitize_subnet(base_ip: str) -> str:
     if len(parts) == 4:
         parts = parts[:3]
     return ".".join(parts) + "."
-
-def sync_ping(host: str, count: int) -> dict:
-    """Synchronous ping execution (Thread-safe for Windows)."""
-    is_win = platform.system().lower() == 'windows'
-    param = '-n' if is_win else '-c'
-    cmd = ['ping', param, str(count), host]
-    
-    try:
-        process = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if process.returncode == 0:
-            # Matches time=54ms or time<1ms across Windows/Linux
-            rtt_match = re.search(r'time[=<]\s*([0-9.]+\s*ms)', process.stdout, re.IGNORECASE)
-            rtt = rtt_match.group(1).strip() if rtt_match else "N/A"
-            return {"host": host, "status": "up", "rtt": rtt}
-        return {"host": host, "status": "down", "rtt": None}
-    except Exception as e:
-        return {"host": host, "status": "error", "error": str(e)}
-
+# PING
 async def async_ping(host: str, count: int = 4) -> dict:
     clean_host = sanitize_target(host)
-    # Offload the blocking subprocess to a background thread
-    return await asyncio.to_thread(sync_ping, clean_host, count)
-
+    
+    def tcp_ping():
+        import time, socket
+        try:
+            start_time = time.time()
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(3)
+                s.connect((clean_host, 80)) # TCP ping on port 80
+            rtt = round((time.time() - start_time) * 1000, 2)
+            return {"host": clean_host, "status": "up", "rtt": f"{rtt} ms"}
+        except Exception as e:
+            return {"host": clean_host, "status": "down", "rtt": None, "error": str(e)}
+            
+    return await asyncio.to_thread(tcp_ping)
+# PING SWEEP
 async def async_ping_sweep(base_ip: str, start_range: int, end_range: int) -> list:
     clean_base = sanitize_subnet(base_ip)
-    tasks = [async_ping(f"{clean_base}{i}", count=1) for i in range(start_range, end_range + 1)]
-    results = await asyncio.gather(*tasks)
-    return [res for res in results if res["status"] == "up"]
+    
+    def check_host(ip):
+        import socket
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                s.connect((ip, 80)) # TCP connect instead of ICMP echo
+            return {"host": ip, "status": "up"}
+        except:
+            return None
 
+    def run_sweep():
+        active = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            ips_to_test = [f"{clean_base}{i}" for i in range(start_range, end_range + 1)]
+            results = executor.map(check_host, ips_to_test)
+            for r in results:
+                if r: active.append(r)
+        return active
+
+    return await asyncio.to_thread(run_sweep)
+    # GRAB BANNER
 async def grab_banner(reader, writer) -> str:
     try:
         writer.write(b"HEAD / HTTP/1.1\r\nHost: target\r\n\r\n")
@@ -81,7 +96,7 @@ async def check_port_with_banner(ip: str, port: int) -> dict:
             return {"port": port, "status": "open", "banner": banner}
         except Exception:
             return {"port": port, "status": "closed"}
-
+# PORT SCANNER
 async def async_port_scan(target: str, ports: list) -> list:
     clean_host = sanitize_target(target)
     results = []
@@ -94,25 +109,23 @@ async def async_port_scan(target: str, ports: list) -> list:
         results.extend([res for res in chunk_results if res["status"] == "open"])
         
     return results
-
-def sync_traceroute(host: str) -> list:
-    is_win = platform.system().lower() == 'windows'
-    # -h 10 restricts hops, -w 100 sets a fast 100ms timeout per hop
-    cmd = ['tracert', '-d', '-h', '10', '-w', '100', host] if is_win else ['traceroute', '-n', '-m', '10', '-w', '1', host]
-    
-    try:
-        process = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-        hops = [line.strip() for line in process.stdout.splitlines() if line.strip() and not line.startswith("Tracing")]
-        return hops if hops else ["Traceroute failed to route path."]
-    except subprocess.TimeoutExpired:
-        return ["Traceroute timed out. The host may be dropping ICMP packets."]
-    except Exception as e:
-        return [f"Execution error: {str(e)}"]
-
+# TRACEROUTE
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
-    return await asyncio.to_thread(sync_traceroute, clean_host)
-
+    
+    def fetch_trace():
+        try:
+            url = f"https://api.hackertarget.com/mtr/?q={clean_host}"
+            response = requests.get(url, timeout=15)
+            if response.status_code == 200:
+                # Split the text response into a list of hops
+                return response.text.splitlines()
+            return ["Failed to retrieve traceroute data from API."]
+        except Exception as e:
+            return [f"Execution error: {str(e)}"]
+            
+    return await asyncio.to_thread(fetch_trace)
+    # DNS LOOKUP
 def sync_dns_lookup(domain: str) -> dict:
     """Synchronous DNS lookup designed to run safely in a thread."""
     clean_domain = sanitize_target(domain)
@@ -133,7 +146,7 @@ def sync_dns_lookup(domain: str) -> dict:
 async def async_dns_lookup(domain: str) -> dict:
     """Offloads the DNS lookup to a background thread to prevent server freezing."""
     return await asyncio.to_thread(sync_dns_lookup, domain)
-# new 
+# WHOIS LOOKUP
 def format_whois_date(date_obj):
     """Safely converts WHOIS datetime objects or arrays into YYYY-MM-DD strings."""
     if not date_obj:
@@ -171,7 +184,7 @@ async def async_whois_lookup(domain: str) -> dict:
             return {"error": f"WHOIS lookup failed: {str(e)}"}
 
     return await asyncio.to_thread(sync_whois)
-
+# MAC LOOKUP
 async def async_mac_lookup(mac_address: str) -> dict:
     """Identifies the hardware vendor using the macvendors.com API with Bearer auth."""
     url = f"https://api.macvendors.com/v1/lookup/{mac_address}"
@@ -194,7 +207,7 @@ async def async_mac_lookup(mac_address: str) -> dict:
                 return {"mac": mac_address, "vendor": f"API Error {response.status_code}", "status": "error"}
         except Exception as e:
             return {"mac": mac_address, "vendor": "Connection Timeout", "status": "error"}
-
+# SUBNET CALCULATOR
 def calculate_subnet(cidr: str) -> dict:
     """Translates CIDR notation into a detailed network profile. (Unchanged)"""
     try:
