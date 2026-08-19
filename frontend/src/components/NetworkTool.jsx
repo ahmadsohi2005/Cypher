@@ -80,7 +80,7 @@ export default function NetworkTool() {
                     { id: 'ping', label: 'Ping' },
                     { id: 'sweep', label: 'Ping Sweep' },
                     { id: 'ports', label: 'Port Scanner' },
-                    { id: 'traceroute', label: 'Traceroute' },
+                    // { id: 'traceroute', label: 'Traceroute' },
                     { id: 'dns', label: 'DNS Lookup' },
                     { id: 'whois', label: 'WHOIS Lookup' },
                     { id: 'mac', label: 'MAC Profiler' },
@@ -121,9 +121,6 @@ export default function NetworkTool() {
                 {/* 2. SWEEP */}
                 {subTab === 'sweep' && (
                     <div className="flex flex-col gap-4">
-                        <p className="text-xs text-yellow-400 mb-3">
-  Note: Because this tool is cloud-hosted, scanning private ranges (like 192.168.x.x) will sweep the server's internal network, not your local connection.
-</p>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <input type="text" value={baseIp} onChange={(e) => setBaseIp(e.target.value)} placeholder="Base IP (e.g., 192.168.1.)" className="p-3 bg-slate-950 border border-slate-700 rounded-lg text-white" />
                             <input type="number" value={startIp} onChange={(e) => setStartIp(Number(e.target.value))} placeholder="Start" className="p-3 bg-slate-950 border border-slate-700 rounded-lg text-white" />
@@ -154,16 +151,7 @@ export default function NetworkTool() {
                     </div>
                 )}
 
-                {/* 4. TRACEROUTE */}
-                {subTab === 'traceroute' && (
-                    <div className="flex gap-3">
-                        <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Target destination" className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-lg text-white" />
-                        <button onClick={() => executeAction('traceroute', { target })} disabled={loading || !target}
-                            className="px-6 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 disabled:opacity-50 transition-colors">
-                            {loading ? 'Tracing Path...' : 'Run Traceroute'}
-                        </button>
-                    </div>
-                )}
+               {/* Traceroute Feature removed -- will be added later */}
 
                 {/* 5. DNS */}
                 {subTab === 'dns' && (
@@ -282,6 +270,9 @@ export default function NetworkTool() {
                                             <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
                                             <span className="font-mono text-sm text-slate-300">{host.host}</span>
                                         </div>
+                                <p className="text-xs text-yellow-400 mb-3">
+  Note: Because this tool is cloud-hosted, scanning private ranges (like 192.168.x.x) will sweep the server's internal network, not your local connection.
+</p>
                                     ))}
                                 </div>
                             </div>
@@ -308,17 +299,7 @@ export default function NetworkTool() {
                             </div>
                         )}
 
-                        {/* Traceroute Result */}
-                        {subTab === 'traceroute' && results.hops && (
-                            <div className="bg-slate-950 p-6 rounded-xl border border-slate-800">
-                                <h4 className="text-lg font-bold text-white mb-4">Network Path</h4>
-                                <div className="space-y-1 font-mono text-sm text-slate-300 max-h-96 overflow-y-auto">
-                                    {results.hops.map((hop, idx) => (
-                                        <div key={idx} className="py-2 border-b border-slate-800/50">{hop}</div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        {/* Traceroute Result will be added later -- not working*/}
 
                         {/* DNS Result */}
                         {subTab === 'dns' && results.records && (
