@@ -127,6 +127,7 @@ def sync_traceroute(host: str) -> list:
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
     return await asyncio.to_thread(sync_traceroute, clean_host)
+    
     # DNS LOOKUP
 def sync_dns_lookup(domain: str) -> dict:
     """Synchronous DNS lookup designed to run safely in a thread."""
