@@ -12,6 +12,6 @@ async def analyze_logs(req: LogRequest):
     if not req.raw_logs.strip():
         raise HTTPException(status_code=400, detail="Log content cannot be empty.")
     if len(req.raw_logs) > 85_000_000:
-        raise HTTPException(status_code=400, detail="Log size exceeds 5MB limit.")
+        raise HTTPException(status_code=400, detail="Log size exceeds 85MB limit.")
     
     return log_analyzer.parse_and_analyze_logs(req.raw_logs)
