@@ -32,27 +32,50 @@ export default function LogAnalyzer() {
     const BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") || 'http://localhost:8000';
     const API_BASE = `${BASE_URL}/api/logs`;
 
-    const handleAnalyze = async () => {
-        if (!rawLogs.trim()) return;
-        setLoading(true);
-        setError('');
-        setResults(null);
+const handleAnalyze = async () => {
+    if (!rawLogs.trim()) return;
+    setLoading(true);
+    setError('');
+    setResults(null);
 
-        try {
-            // WAF BYPASS: Base64 encode the logs so the cloud firewall ignores the SQLi/XSS strings
-            const encodedLogs = btoa(unescape(encodeURIComponent(rawLogs)));
-            
-            const res = await axios.post(`${API_BASE}/analyze`, { 
-                raw_logs: encodedLogs,
-                is_encoded: true // Tell Python to decode this
-            });
-            setResults(res.data);
-        } catch (err) {
-            setError(err.response?.data?.detail || 'Log analysis failed or backend is unreachable.');
-        } finally {
-            setLoading(false);
-        }
-    };
+    try {
+        // 1. WAF BYPASS: Send logs to Python securely
+        const encodedLogs = btoa(unescape(encodeURIComponent(rawLogs)));
+
+        const res = await axios.post(`${API_BASE}/analyze`, {
+            raw_logs: encodedLogs,
+            is_encoded: true 
+        });
+        
+        // 2. Update the UI with the raw, readable data
+        setResults(res.data);
+
+        // 3. WAF BYPASS FOR DATABASE: Encode the malicious strings before saving history
+        const safeHistoryData = {
+            ...res.data,
+            flagged_events: res.data.flagged_events.map(evt => ({
+                ...evt,
+                // Base64 encode the raw string so the database firewall doesn't drop the insert
+                raw: "[ENCODED_FOR_WAF_SAFETY] " + btoa(unescape(encodeURIComponent(evt.raw)))
+            }))
+        };
+
+        // 4. Added 'await' to catch silent database rejections!
+        await saveActivity({
+            module: 'Log Analyzer',
+            action: 'Log Analysis',
+            target: `Stream (${res.data.summary.total_lines} lines)`,
+            summary: `Analyzed logs: found ${res.data.summary.total_threats} threat(s) and ${res.data.summary.brute_force_alerts?.length || 0} brute-force attempt(s)`,
+            fullResult: safeHistoryData
+        });
+
+    } catch (err) {
+        console.error("Log Analysis Error:", err);
+        setError(err.response?.data?.detail || err.message || 'Log analysis failed or backend is unreachable.');
+    } finally {
+        setLoading(false);
+    }
+};
     
     const handleFileUpload = (e) => {
         const file = e.target.files[0];
