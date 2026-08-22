@@ -1,5 +1,8 @@
 import httpx
 import asyncio
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from datetime import datetime
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -8,6 +11,22 @@ import os, re
 load_dotenv()
 
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
+
+def is_safe_target_domain(domain_or_url: str) -> bool:
+    """Verifies that the target does not resolve to private, loopback, or link-local IPs."""
+    try:
+        clean = domain_or_url.strip()
+        if clean.startswith(('http://', 'https://')):
+            clean = urlparse(clean).hostname or clean
+        clean = clean.split('/')[0].split(':')[0].lower()
+        if clean in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+            return False
+        ip = ipaddress.ip_address(socket.gethostbyname(clean))
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+        return True
+    except Exception:
+        return False
 
 def clean_osint_target(target: str, target_type: str) -> str:
     """Strips protocols and paths so APIs get clean domains."""
@@ -110,9 +129,12 @@ async def get_domain_whois(domain: str) -> dict:
 
 # --- 4. WEB SCRAPER ---
 async def scrape_website_metadata(domain: str) -> dict:
-    """Scrapes the target domain for metadata, server headers, and basic info."""
+    """Scrapes the target domain for metadata, server headers, and basic info with SSRF & TLS protections."""
+    if not is_safe_target_domain(domain):
+        return {"status": "failed", "error": "Target domain resolved to a private/restricted address."}
+
     url = f"http://{domain}" if not domain.startswith("http") else domain
-    async with httpx.AsyncClient(verify=False) as client:
+    async with httpx.AsyncClient(verify=True) as client:
         try:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             response = await client.get(url, headers=headers, follow_redirects=True, timeout=15.0)
@@ -189,8 +211,6 @@ async def get_archived_endpoints(domain: str) -> dict:
             return {"status": "failed"}
 
 # --- AUTOMATED THREAT BRIEFING ---
-# Replace your existing generate_markdown_report function with this updated version:
-
 def generate_markdown_report(target: str, data: dict, target_type: str) -> str:
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     report = f"# OSINT Threat Briefing: {target}\n**Generated:** {timestamp}\n\n"
