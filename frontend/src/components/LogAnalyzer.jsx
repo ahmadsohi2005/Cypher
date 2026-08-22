@@ -1,19 +1,19 @@
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    FileText, 
-    Upload, 
-    Trash2, 
-    ShieldAlert, 
-    AlertTriangle, 
-    Terminal, 
-    Activity, 
-    CheckCircle2, 
-    Copy, 
-    Check, 
-    Filter, 
-    Search, 
+import {
+    FileText,
+    Upload,
+    Trash2,
+    ShieldAlert,
+    AlertTriangle,
+    Terminal,
+    Activity,
+    CheckCircle2,
+    Copy,
+    Check,
+    Filter,
+    Search,
     AlertCircle,
     Zap,
     Server,
@@ -148,10 +148,10 @@ export default function LogAnalyzer() {
         if (!searchFilter) return true;
         const query = searchFilter.toLowerCase();
         return event.threat?.toLowerCase().includes(query) ||
-               event.raw?.toLowerCase().includes(query) ||
-               event.severity?.toLowerCase().includes(query) ||
-               event.category?.toLowerCase().includes(query) ||
-               String(event.line).includes(query);
+            event.raw?.toLowerCase().includes(query) ||
+            event.severity?.toLowerCase().includes(query) ||
+            event.category?.toLowerCase().includes(query) ||
+            String(event.line).includes(query);
     }) || [];
 
     return (
@@ -168,9 +168,6 @@ export default function LogAnalyzer() {
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-wide">Log Analyzer & SIEM</h2>
-                            <span className="px-2 py-0.5 bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 text-[10px] font-mono font-semibold rounded tracking-wider uppercase">
-                                [SIEM_TRIAGE_CORE]
-                            </span>
                         </div>
                         <p className="text-sm text-slate-400 font-mono">
                             Heuristic regex signature matching, brute-force correlation, and attack telemetry parser.
@@ -180,7 +177,7 @@ export default function LogAnalyzer() {
 
                 <div className="flex items-center gap-2 self-start md:self-auto bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-mono text-slate-400">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>INGEST_PIPELINE: ACTIVE (UP TO 25MB)</span>
+                    <span>(UP TO 25MB)  ACTIVE</span>
                 </div>
             </div>
 
@@ -189,7 +186,6 @@ export default function LogAnalyzer() {
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Terminal className="w-3.5 h-3.5 text-emerald-400" />
                             Sample Ingestion:
                         </span>
                         <button
@@ -305,21 +301,19 @@ export default function LogAnalyzer() {
                             <span className="text-xs uppercase font-mono text-slate-400 block mb-1">Total Ingested Lines</span>
                             <span className="text-3xl font-bold text-white font-mono">{results.summary.total_lines}</span>
                         </div>
-                        <div className={`p-5 border rounded-2xl ${
-                            results.summary.total_threats > 0
-                                ? 'bg-red-950/30 border-red-500/40 shadow-[0_0_25px_rgba(239,68,68,0.15)]'
-                                : 'bg-slate-950/80 border-slate-800'
-                        }`}>
+                        <div className={`p-5 border rounded-2xl ${results.summary.total_threats > 0
+                            ? 'bg-red-950/30 border-red-500/40 shadow-[0_0_25px_rgba(239,68,68,0.15)]'
+                            : 'bg-slate-950/80 border-slate-800'
+                            }`}>
                             <span className="text-xs uppercase font-mono text-slate-400 block mb-1">Flagged Threat Signatures</span>
                             <span className={`text-3xl font-bold font-mono ${results.summary.total_threats > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                 {results.summary.total_threats}
                             </span>
                         </div>
-                        <div className={`p-5 border rounded-2xl ${
-                            results.summary.brute_force_alerts?.length > 0
-                                ? 'bg-amber-950/30 border-amber-500/40 shadow-[0_0_25px_rgba(245,158,11,0.15)]'
-                                : 'bg-slate-950/80 border-slate-800'
-                        }`}>
+                        <div className={`p-5 border rounded-2xl ${results.summary.brute_force_alerts?.length > 0
+                            ? 'bg-amber-950/30 border-amber-500/40 shadow-[0_0_25px_rgba(245,158,11,0.15)]'
+                            : 'bg-slate-950/80 border-slate-800'
+                            }`}>
                             <span className="text-xs uppercase font-mono text-slate-400 block mb-1">Brute-Force Anomaly Triggers</span>
                             <span className={`text-3xl font-bold font-mono ${results.summary.brute_force_alerts?.length > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
                                 {results.summary.brute_force_alerts?.length || 0}
@@ -450,13 +444,12 @@ export default function LogAnalyzer() {
                                                 </span>
                                                 <span className="font-bold text-red-400 font-mono">{event.threat}</span>
                                             </div>
-                                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${
-                                                event.severity?.toLowerCase() === 'high' || event.severity?.toLowerCase() === 'critical'
-                                                    ? 'bg-red-500/10 text-red-300 border-red-500/30'
-                                                    : event.severity?.toLowerCase() === 'medium'
-                                                        ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
-                                                        : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                                            }`}>
+                                            <span className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase border ${event.severity?.toLowerCase() === 'high' || event.severity?.toLowerCase() === 'critical'
+                                                ? 'bg-red-500/10 text-red-300 border-red-500/30'
+                                                : event.severity?.toLowerCase() === 'medium'
+                                                    ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
+                                                    : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                                                }`}>
                                                 {event.severity}
                                             </span>
                                         </div>
