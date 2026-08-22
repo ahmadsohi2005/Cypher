@@ -151,7 +151,25 @@ export default function NetworkTool() {
                     </div>
                 )}
 
-               {/* Traceroute Feature removed -- will be added later */}
+                {/* TraceRoute Result */}
+                {subTab === 'traceroute' && results.hops && (
+                            <div className="bg-slate-950/80 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                                    <h4 className="text-lg font-bold text-white tracking-wide">Network Path Telemetry</h4>
+                                    <span className="text-xs font-mono text-slate-400">{results.hops.length} Hops Identified</span>
+                                </div>
+                                <div className="space-y-2 font-mono text-xs max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-800">
+                                    {results.hops.map((hop, idx) => (
+                                        <div key={idx} className="flex items-center gap-3 p-3 bg-slate-900/90 rounded-xl border border-slate-800/80 hover:border-slate-700 transition-colors">
+                                            <span className="px-2 py-0.5 bg-blue-950/80 border border-blue-500/30 text-blue-400 font-bold rounded text-[11px] shrink-0">
+                                                #{idx + 1}
+                                            </span>
+                                            <span className="text-slate-300 break-all">{hop}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                 {/* 5. DNS */}
                 {subTab === 'dns' && (
