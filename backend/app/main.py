@@ -12,19 +12,31 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 app = FastAPI(title="Cybersecurity Toolkit API")
 
-origins = [ 
-    "http://localhost:5173", 
-    "https://cypher-1d7g-gamma.vercel.app"
-]
+# Configure CORS dynamically from environment or default to local dev ports
+env_origins = os.getenv("ALLOWED_ORIGINS")
+if env_origins:
+    origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+else:
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "https://cypher-lilac.vercel.app"
+    ]
 
-# Enable CORS for React frontend
+# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (Vercel, Localhost, 127.0.0.1)
-    allow_credentials=False, # Must be False when origins is "*"
-    allow_methods=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
