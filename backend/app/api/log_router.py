@@ -20,7 +20,7 @@ async def analyze_logs(req: LogRequest):
     except Exception:
         raise HTTPException(status_code=400, detail="Failed to decode log payload.")
 
-    if len(log_content) > 5_000_000:
-        raise HTTPException(status_code=400, detail="Log size exceeds 5MB limit.")
+    if len(log_content) > 40_000_000:
+        raise HTTPException(status_code=400, detail="Log size exceeds 40MB limit.")
     
     return log_analyzer.parse_and_analyze_logs(log_content)
