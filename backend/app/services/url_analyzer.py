@@ -2,6 +2,7 @@ import ssl
 import socket
 import asyncio
 import base64
+import ipaddress
 from datetime import datetime
 from urllib.parse import urlparse
 import tldextract
@@ -14,6 +15,44 @@ HIGH_VALUE_TARGETS = [
     "google", "microsoft", "paypal", "apple", 
     "amazon", "facebook", "netflix", "bankofamerica", "icloud"
 ]
+
+# Limit concurrent headless browser instances to prevent resource exhaustion (DoS)
+BROWSER_SEMAPHORE = asyncio.Semaphore(2)
+
+def is_safe_public_url(url: str) -> tuple[bool, str]:
+    """
+    Validates that a URL uses a valid scheme (http/https) and does not resolve
+    to private, loopback, link-local, or cloud metadata IP ranges (SSRF defense).
+    """
+    try:
+        if not url.startswith(('http://', 'https://')):
+            url = 'http://' + url
+            
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False, f"Unsupported URL scheme: {parsed.scheme}"
+            
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "Invalid target hostname."
+            
+        hostname_clean = hostname.strip().lower()
+        if hostname_clean in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+            return False, "Targeting local host addresses is restricted."
+            
+        # Resolve hostname and check IP against private/internal ranges
+        try:
+            ip_str = socket.gethostbyname(hostname_clean)
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return False, "Access to private or local network resources is prohibited (SSRF Protection)."
+        except socket.gaierror:
+            # Cannot resolve domain via DNS
+            return False, "Target domain could not be resolved (DNS resolution failed)."
+            
+        return True, ""
+    except Exception as e:
+        return False, f"URL validation failed: {str(e)}"
 
 def extract_domain_name(url: str) -> str:
     """Uses the official Public Suffix List to perfectly extract the domain name."""
@@ -46,8 +85,12 @@ def check_typosquatting(url: str) -> dict:
 
 # --- 2. SSL/TLS INSPECTOR ---
 def sync_ssl_inspect(url: str) -> dict:
-    parsed = urlparse(url)
-    hostname = parsed.netloc or parsed.path
+    is_safe, error_reason = is_safe_public_url(url)
+    if not is_safe:
+        return {"status": "failed", "error": error_reason}
+
+    parsed = urlparse(url if url.startswith(('http://', 'https://')) else 'http://' + url)
+    hostname = parsed.hostname or parsed.netloc
 
     context = ssl.create_default_context()
     try:
@@ -81,6 +124,10 @@ async def async_ssl_inspect(url: str) -> dict:
 # --- 3. SAFE VISUAL CAPTURE ---
 def sync_capture_screenshot(url: str) -> dict:
     """Runs synchronously in a background thread to bypass Windows async loop bugs."""
+    is_safe, error_reason = is_safe_public_url(url)
+    if not is_safe:
+        return {"status": "failed", "error": error_reason}
+
     print(f"\n[DEBUG] 1. Starting threaded visual capture for: {url}")
     try:
         with sync_playwright() as p:
@@ -127,5 +174,6 @@ def sync_capture_screenshot(url: str) -> dict:
         return {"status": "failed", "error": error_msg}
 
 async def async_capture_screenshot(url: str) -> dict:
-    """Wraps the sync Playwright function in a background thread."""
-    return await asyncio.to_thread(sync_capture_screenshot, url)
+    """Wraps the sync Playwright function with a concurrency semaphore."""
+    async with BROWSER_SEMAPHORE:
+        return await asyncio.to_thread(sync_capture_screenshot, url)
