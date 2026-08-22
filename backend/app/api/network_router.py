@@ -45,10 +45,10 @@ async def scan_ports(req: PortScanRequest):
     open_ports = await network_utils.async_port_scan(req.target, req.ports)
     return {"target": req.target, "open_ports": open_ports}
 
-# @router.post("/traceroute")
-# async def traceroute_target(req: TargetRequest):
-#     hops = await network_utils.async_traceroute(req.target)
-#     return {"target": req.target, "hops": hops}
+@router.post("/traceroute")
+async def traceroute_target(req: TargetRequest):
+    hops = await network_utils.async_traceroute(req.target)
+    return {"target": req.target, "hops": hops}
 
 @router.post("/dns-lookup")
 async def dns_lookup(req: TargetRequest):
