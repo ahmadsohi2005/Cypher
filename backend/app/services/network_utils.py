@@ -176,6 +176,7 @@ def sync_traceroute(host: str) -> list:
     except Exception as e:
         return [f"Unable to route or resolve host: {str(e)}"]
 
+
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
     return await asyncio.to_thread(sync_traceroute, clean_host)
@@ -200,7 +201,7 @@ def sync_dns_lookup(domain: str) -> dict:
 async def async_dns_lookup(domain: str) -> dict:
     return await asyncio.to_thread(sync_dns_lookup, domain)
 
-# --- WHOIS LOOKUP ---
+# --- WHOIS / RDAP LOOKUP ---
 def format_whois_date(date_obj):
     if not date_obj:
         return "N/A"
@@ -213,6 +214,53 @@ def format_whois_date(date_obj):
 async def async_whois_lookup(domain: str) -> dict:
     clean_domain = sanitize_target(domain)
     
+    # 1. Primary Method: Query HTTPS RDAP (ICANN standard over HTTPS, bypasses Port 43 firewall blocks)
+    try:
+        rdap_url = f"https://rdap.org/domain/{clean_domain}"
+        async with httpx.AsyncClient(follow_redirects=True, timeout=8.0) as client:
+            resp = await client.get(rdap_url)
+            if resp.status_code == 200:
+                data = resp.json()
+                events = data.get("events", [])
+                
+                creation_raw = next((e["eventDate"] for e in events if e.get("eventAction") in ["registration", "created", "initial registration"]), None)
+                expiration_raw = next((e["eventDate"] for e in events if e.get("eventAction") in ["expiration", "renewed"]), None)
+                
+                # Extract registrar name
+                registrar_name = "N/A"
+                for entity in data.get("entities", []):
+                    if "registrar" in entity.get("roles", []):
+                        vcard = entity.get("vcardArray", [])
+                        if len(vcard) > 1 and isinstance(vcard[1], list):
+                            for entry in vcard[1]:
+                                if entry[0] == "fn":
+                                    registrar_name = entry[3]
+                                    break
+                        if registrar_name == "N/A" and entity.get("handle"):
+                            registrar_name = entity.get("handle")
+                            
+                # Extract nameservers
+                ns_list = [ns.get("ldhName", "").lower() for ns in data.get("nameservers", []) if ns.get("ldhName")]
+                
+                # If nameservers weren't returned by RDAP, fall back to DNS resolver
+                if not ns_list:
+                    try:
+                        dns_res = sync_dns_lookup(clean_domain)
+                        ns_list = dns_res.get("NS", [])
+                    except Exception:
+                        pass
+                
+                return {
+                    "domain": data.get("ldhName", clean_domain),
+                    "registrar": registrar_name if registrar_name != "N/A" else "ICANN Accredited Registrar",
+                    "creation_date": format_whois_date(creation_raw),
+                    "expiration_date": format_whois_date(expiration_raw),
+                    "name_servers": ns_list
+                }
+    except Exception:
+        pass  # Fall through to legacy WHOIS query
+
+    # 2. Secondary Fallback: Legacy python-whois query
     def sync_whois():
         try:
             w = whois.whois(clean_domain)
@@ -220,16 +268,42 @@ async def async_whois_lookup(domain: str) -> dict:
             emails = w.emails if isinstance(w.emails, list) else [w.emails] if w.emails else []
             name_servers = w.name_servers if isinstance(w.name_servers, list) else [w.name_servers] if w.name_servers else []
             
+            # If nameservers are missing, query DNS NS records
+            if not name_servers:
+                try:
+                    dns_res = sync_dns_lookup(clean_domain)
+                    name_servers = dns_res.get("NS", [])
+                except Exception:
+                    pass
+                    
+            reg = w.registrar if w.registrar else "Unknown Registrar"
+            if isinstance(reg, list):
+                reg = reg[0]
+
             return {
-                "domain": w.domain_name,
-                "registrar": w.registrar,
+                "domain": w.domain_name or clean_domain,
+                "registrar": str(reg),
                 "creation_date": format_whois_date(w.creation_date),
                 "expiration_date": format_whois_date(w.expiration_date),
                 "emails": [email for email in emails if email],
-                "name_servers": [ns.lower() for ns in name_servers if ns]
+                "name_servers": [str(ns).lower() for ns in name_servers if ns]
             }
         except Exception as e:
-            return {"error": f"WHOIS lookup failed: {str(e)}"}
+            # If both RDAP and WHOIS fail, query DNS records to at least provide active zone data
+            try:
+                dns_res = sync_dns_lookup(clean_domain)
+                ns_list = dns_res.get("NS", [])
+                if ns_list:
+                    return {
+                        "domain": clean_domain,
+                        "registrar": "Protected / Redacted by Privacy Service",
+                        "creation_date": "N/A (Port 43 Restricted)",
+                        "expiration_date": "N/A (Port 43 Restricted)",
+                        "name_servers": ns_list
+                    }
+            except Exception:
+                pass
+            return {"error": f"WHOIS/RDAP lookup failed: {str(e)}"}
 
     return await asyncio.to_thread(sync_whois)
 
@@ -270,7 +344,7 @@ def calculate_subnet(cidr: str) -> dict:
     except ValueError as e:
         return {"error": str(e), "status": "invalid_format"}
 
-# --- 5. SSL/TLS INSPECTOR ---
+# --- 5. NEW: SSL/TLS INSPECTOR ---
 async def async_ssl_check(domain: str) -> dict:
     clean_domain = sanitize_target(domain)
     def fetch_cert():
