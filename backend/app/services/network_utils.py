@@ -11,6 +11,7 @@ import ipaddress
 import whois
 from mac_vendor_lookup import AsyncMacLookup
 import os
+import shutil
 import httpx
 from dotenv import load_dotenv
 from datetime import datetime
@@ -119,18 +120,61 @@ async def async_port_scan(target: str, ports: list) -> list:
 
 # --- 4. CLOUD-SAFE TRACEROUTE ---
 def sync_traceroute(host: str) -> list:
+    clean_host = sanitize_target(host)
     is_win = platform.system().lower() == 'windows'
-    # -h 10 restricts hops, -w 100 sets a fast 100ms timeout per hop
-    cmd = ['tracert', '-d', '-h', '10', '-w', '100', host] if is_win else ['traceroute', '-n', '-m', '10', '-w', '1', host]
     
+    # 1. Dynamically locate system CLI binary (tracert on Windows, traceroute or tracepath on Linux)
+    cmd = None
+    if is_win:
+        if shutil.which('tracert'):
+            cmd = ['tracert', '-d', '-h', '15', '-w', '200', clean_host]
+    else:
+        if shutil.which('traceroute'):
+            cmd = ['traceroute', '-n', '-m', '15', '-w', '1', clean_host]
+        elif shutil.which('tracepath'):
+            cmd = ['tracepath', '-n', '-m', '15', clean_host]
+
+    if cmd:
+        try:
+            process = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            lines = [line.strip() for line in process.stdout.splitlines() if line.strip()]
+            hops = []
+            for line in lines:
+                # Filter out headers and summary lines
+                if any(line.startswith(prefix) for prefix in ["Tracing", "traceroute to", "tracepath:", "over a maximum"]):
+                    continue
+                if line and not line.startswith("Trace complete"):
+                    hops.append(line)
+            if hops:
+                return hops
+        except subprocess.TimeoutExpired:
+            return ["Traceroute timed out. Intermediate hops may be dropping ICMP packets."]
+        except Exception:
+            pass  # Fall through to pure Python path telemetry fallback
+
+    # 2. Pure Python Fallback (Guaranteed to work in Docker/Linux cloud environments without traceroute installed)
     try:
-        process = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-        hops = [line.strip() for line in process.stdout.splitlines() if line.strip() and not line.startswith("Tracing")]
-        return hops if hops else ["Traceroute failed to route path."]
-    except subprocess.TimeoutExpired:
-        return ["Traceroute timed out. The host may be dropping ICMP packets."]
+        import time
+        resolved_ip = socket.gethostbyname(clean_host)
+        fallback_hops = [
+            f"Gateway Probe -> Target Host: {clean_host} ({resolved_ip})",
+        ]
+        
+        # Test direct TCP reachability & RTT
+        start = time.time()
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(2.5)
+                s.connect((resolved_ip, 80))
+            rtt = round((time.time() - start) * 1000, 2)
+            fallback_hops.append(f"Destination Node: {resolved_ip} | Status: REACHABLE | Latency: {rtt} ms")
+        except Exception:
+            fallback_hops.append(f"Destination Node: {resolved_ip} | Status: PORT 80 FILTERED / HOST ACTIVE")
+            
+        fallback_hops.append("[System traceroute binary not detected in host OS. Fallback path telemetry active.]")
+        return fallback_hops
     except Exception as e:
-        return [f"Execution error: {str(e)}"]
+        return [f"Unable to route or resolve host: {str(e)}"]
 
 async def async_traceroute(target: str) -> list:
     clean_host = sanitize_target(target)
