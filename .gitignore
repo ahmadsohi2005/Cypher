@@ -38,3 +38,12 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# ========================
+# Environment Files
+# ========================
+.env
+.env.*
+*.env
+backend/.env*
+frontend/.env*
