@@ -95,9 +95,6 @@ export default function OsintTool() {
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-wide">OSINT Intelligence</h2>
-                            <span className="px-2 py-0.5 bg-purple-950/60 border border-purple-500/40 text-purple-400 text-[10px] font-mono font-semibold rounded tracking-wider uppercase">
-                                [OSINT_INTEL_V2]
-                            </span>
                         </div>
                         <p className="text-sm text-slate-400 font-mono">
                             Passive reconnaissance, dark web credential breach audits, and infrastructure scraping.
@@ -107,7 +104,7 @@ export default function OsintTool() {
 
                 <div className="flex items-center gap-2 self-start md:self-auto bg-slate-950/60 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-mono text-slate-400">
                     <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
-                    <span>FEED_STATUS: AGGREGATING</span>
+                    <span>STATUS: AGGREGATING</span>
                 </div>
             </div>
 
