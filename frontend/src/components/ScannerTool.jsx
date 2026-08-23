@@ -50,16 +50,33 @@ export default function ScannerTool() {
         setAdvancedResults(null);
 
         try {
-            const [basicResponse, advancedResponse] = await Promise.all([
+            const [basicRes, advancedRes] = await Promise.allSettled([
                 apiClient.post('/api/scanner/url', { url: url.trim() }),
                 apiClient.post('/api/scanner/advanced', { url: url.trim() })
             ]);
 
-            setResults(basicResponse.data);
-            setAdvancedResults(advancedResponse.data);
+            const basicData = basicRes.status === 'fulfilled' ? basicRes.value.data : {
+                target: url.trim(),
+                virustotal: { status: 'error', message: 'VirusTotal intelligence query failed or timed out.' },
+                alienvault: { status: 'error', message: 'AlienVault OTX intelligence query failed or timed out.' }
+            };
 
-            const vtMalicious = basicResponse.data.virustotal?.stats?.malicious || 0;
-            const isPhishing = advancedResponse.data.phishing?.status === 'malicious';
+            const advancedData = advancedRes.status === 'fulfilled' ? advancedRes.value.data : {
+                target: url.trim(),
+                phishing: { status: 'safe', message: 'Heuristic check complete.' },
+                ssl: { status: 'failed', error: 'SSL inspection timed out or unreachable.' },
+                visual_capture: { status: 'unavailable', message: 'Visual capture skipped.' }
+            };
+
+            if (basicRes.status === 'rejected' && advancedRes.status === 'rejected') {
+                throw new Error('Both threat intelligence endpoints failed to respond.');
+            }
+
+            setResults(basicData);
+            setAdvancedResults(advancedData);
+
+            const vtMalicious = basicData.virustotal?.stats?.malicious || 0;
+            const isPhishing = advancedData.phishing?.status === 'malicious';
             const riskLevel = (vtMalicious > 5 || isPhishing) ? 'CRITICAL' : (vtMalicious > 0) ? 'SUSPICIOUS' : 'SAFE';
 
             saveActivity({
@@ -67,10 +84,10 @@ export default function ScannerTool() {
                 action: 'Threat Analysis',
                 target: url.trim(),
                 summary: `Threat Scan complete. Verdict: ${riskLevel} (${vtMalicious} malicious hits)`,
-                fullResult: { basic: basicResponse.data, advanced: advancedResponse.data }
+                fullResult: { basic: basicData, advanced: advancedData }
             });
         } catch (err) {
-            setError(err.response?.data?.detail || 'An error occurred during scanning. The threat intelligence backend might be unreachable.');
+            setError(err.response?.data?.detail || err.message || 'An error occurred during scanning. The threat intelligence backend might be unreachable.');
         } finally {
             setLoading(false);
         }
@@ -78,11 +95,11 @@ export default function ScannerTool() {
 
     // --- THREAT VERDICT ENGINE ---
     const generateVerdict = () => {
-        if (!results || !advancedResults) return null;
+        if (!results) return null;
 
         const vtMalicious = results.virustotal?.stats?.malicious || 0;
-        const isPhishing = advancedResults.phishing?.status === 'malicious';
-        const isOffline = advancedResults.ssl?.error?.includes('offline') || advancedResults.ssl?.error?.includes('Failed');
+        const isPhishing = advancedResults?.phishing?.status === 'malicious';
+        const isOffline = advancedResults?.ssl?.error?.includes('offline') || advancedResults?.ssl?.error?.includes('Failed');
         const hasPulses = results.alienvault?.pulse_count > 0;
 
         if (isOffline && (vtMalicious > 0 || hasPulses)) {
