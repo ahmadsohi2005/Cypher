@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     FileText,
@@ -61,9 +61,9 @@ export default function LogAnalyzer() {
     const [searchFilter, setSearchFilter] = useState('');
     const fileInputRef = useRef(null);
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/logs`
-        : 'http://127.0.0.1:8000/api/logs';
+    // const API_BASE = import.meta.env.VITE_API_BASE_URL
+    //     ? `${import.meta.env.VITE_API_BASE_URL}/api/logs`
+    //     : 'http://127.0.0.1:8000/api/logs'; removed it
 
     const copyToClipboard = (text, key) => {
         if (!text) return;
@@ -98,7 +98,7 @@ export default function LogAnalyzer() {
             // Encode logs to pass cloud firewalls smoothly without blocking the thread
             const encodedLogs = fastBase64Encode(rawLogs);
 
-            const res = await axios.post(`${API_BASE}/analyze`, {
+            const res = await apiClient.post('/api/logs/analyze', {
                 raw_logs: encodedLogs,
                 is_encoded: true
             });
