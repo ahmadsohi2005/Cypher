@@ -1,21 +1,21 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-    Search, 
-    Globe, 
-    Server, 
-    Mail, 
-    FileText, 
-    ShieldAlert, 
-    ShieldCheck, 
-    MapPin, 
-    Cpu, 
-    Copy, 
-    Check, 
-    ExternalLink, 
-    AlertCircle, 
-    Terminal, 
+import {
+    Search,
+    Globe,
+    Server,
+    Mail,
+    FileText,
+    ShieldAlert,
+    ShieldCheck,
+    MapPin,
+    Cpu,
+    Copy,
+    Check,
+    ExternalLink,
+    AlertCircle,
+    Terminal,
     Zap,
     History,
     Network,
@@ -38,10 +38,6 @@ export default function OsintTool() {
     const [error, setError] = useState('');
     const [copiedKey, setCopiedKey] = useState(null);
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/osint`
-        : 'http://127.0.0.1:8000/api/osint';
-
     const copyToClipboard = (text, key) => {
         if (!text) return;
         navigator.clipboard.writeText(typeof text === 'object' ? JSON.stringify(text, null, 2) : text);
@@ -56,7 +52,7 @@ export default function OsintTool() {
         setResults(null);
 
         try {
-            const response = await axios.post(`${API_BASE}/scan`, {
+            const response = await apiClient.post('/api/osint/scan', {
                 target: target.trim(),
                 target_type: targetType
             });
@@ -65,7 +61,7 @@ export default function OsintTool() {
                 module: 'OSINT',
                 action: `${targetType.charAt(0).toUpperCase() + targetType.slice(1)} Recon`,
                 target: target.trim(),
-                summary: response.data.breaches?.exposed_data?.length > 0 
+                summary: response.data.breaches?.exposed_data?.length > 0
                     ? `Compromised leaks found: ${response.data.breaches.exposed_data.join(', ')}`
                     : response.data.threatfox?.malware_hits > 0
                         ? `Malware hits detected: ${response.data.threatfox.malware_hits}`
@@ -121,11 +117,10 @@ export default function OsintTool() {
                                 setResults(null);
                                 setError('');
                             }}
-                            className={`flex items-center justify-center gap-2.5 p-3.5 rounded-xl font-medium text-sm transition-all duration-200 border ${
-                                isActive
-                                    ? 'bg-purple-600/20 text-purple-300 border-purple-500/60 shadow-[0_0_20px_rgba(168,85,247,0.25)] font-semibold'
-                                    : 'bg-slate-950/40 text-slate-400 border-slate-800/80 hover:bg-slate-800/60 hover:text-slate-200 hover:border-slate-700'
-                            }`}
+                            className={`flex items-center justify-center gap-2.5 p-3.5 rounded-xl font-medium text-sm transition-all duration-200 border ${isActive
+                                ? 'bg-purple-600/20 text-purple-300 border-purple-500/60 shadow-[0_0_20px_rgba(168,85,247,0.25)] font-semibold'
+                                : 'bg-slate-950/40 text-slate-400 border-slate-800/80 hover:bg-slate-800/60 hover:text-slate-200 hover:border-slate-700'
+                                }`}
                         >
                             <Icon className={`w-4 h-4 ${isActive ? 'text-purple-400' : 'text-slate-500'}`} />
                             <span>{type.label}</span>
@@ -222,20 +217,18 @@ export default function OsintTool() {
                             <div className="col-span-1 md:col-span-2 space-y-6">
                                 {/* Phishing Heuristics Block */}
                                 {results.heuristics && (
-                                    <div className={`p-6 border rounded-2xl ${
-                                        results.heuristics.risk_level === 'High'
-                                            ? 'bg-yellow-950/30 border-yellow-500/40 shadow-[0_0_20px_rgba(234,179,8,0.15)]'
-                                            : 'bg-slate-950/80 border-slate-800'
-                                    }`}>
+                                    <div className={`p-6 border rounded-2xl ${results.heuristics.risk_level === 'High'
+                                        ? 'bg-yellow-950/30 border-yellow-500/40 shadow-[0_0_20px_rgba(234,179,8,0.15)]'
+                                        : 'bg-slate-950/80 border-slate-800'
+                                        }`}>
                                         <div className="flex items-center justify-between mb-3">
                                             <h3 className={`text-lg font-bold font-mono ${results.heuristics.risk_level === 'High' ? 'text-yellow-400' : 'text-emerald-400'}`}>
                                                 {results.heuristics.risk_level === 'High' ? '⚠️ Phishing Indicators Detected' : '✅ No Obvious Phishing Patterns'}
                                             </h3>
-                                            <span className={`px-2.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${
-                                                results.heuristics.risk_level === 'High'
-                                                    ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
-                                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                            }`}>
+                                            <span className={`px-2.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${results.heuristics.risk_level === 'High'
+                                                ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+                                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                }`}>
                                                 RISK: {results.heuristics.risk_level}
                                             </span>
                                         </div>
@@ -254,20 +247,18 @@ export default function OsintTool() {
 
                                 {/* Breaches Block */}
                                 {results.breaches && (
-                                    <div className={`p-6 border rounded-2xl ${
-                                        results.breaches.exposed_data?.length > 0
-                                            ? 'bg-red-950/30 border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
-                                            : 'bg-emerald-950/20 border-emerald-500/30'
-                                    }`}>
+                                    <div className={`p-6 border rounded-2xl ${results.breaches.exposed_data?.length > 0
+                                        ? 'bg-red-950/30 border-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                                        : 'bg-emerald-950/20 border-emerald-500/30'
+                                        }`}>
                                         <div className="flex items-center justify-between mb-3">
                                             <h3 className={`text-lg font-bold font-mono ${results.breaches.exposed_data?.length > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                                                 {results.breaches.exposed_data?.length > 0 ? '🚨 Sensitive Data Compromised in Leaks' : '✅ No Known Breaches Found'}
                                             </h3>
-                                            <span className={`px-2.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${
-                                                results.breaches.exposed_data?.length > 0
-                                                    ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                            }`}>
+                                            <span className={`px-2.5 py-0.5 rounded text-xs font-mono font-bold uppercase border ${results.breaches.exposed_data?.length > 0
+                                                ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                                }`}>
                                                 {results.breaches.exposed_data?.length > 0 ? 'COMPROMISED' : 'CLEAN'}
                                             </span>
                                         </div>
