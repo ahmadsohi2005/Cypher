@@ -1,11 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 import asyncio
 
 from app.services import scanner_utils
 from app.services import url_analyzer
+from app.core.auth import get_current_user
 
-router = APIRouter(prefix="/api/scanner", tags=["Malicious URL Scanner"])
+router = APIRouter(
+    prefix="/api/scanner",
+    tags=["Malicious URL Scanner"],
+    dependencies=[Depends(get_current_user)]
+)
 
 class URLScanRequest(BaseModel):
     url: str
