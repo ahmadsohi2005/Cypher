@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import apiClient from '../utils/apiClient';
 import LoadingSpinner from './LoadingSpinner';
+import { saveActivity } from '../utils/historyManager';
 
 export default function ScannerTool() {
     const [url, setUrl] = useState('');
@@ -11,21 +12,52 @@ export default function ScannerTool() {
     const [error, setError] = useState('');
 
     const scanUrl = async () => {
+        if (!url.trim()) return;
         setLoading(true);
         setError('');
         setResults(null);
         setAdvancedResults(null);
 
         try {
-            const [basicResponse, advancedResponse] = await Promise.all([
-                apiClient.post('/api/scanner/url', { url }),
-                apiClient.post('/api/scanner/advanced', { url })
+            const [basicRes, advancedRes] = await Promise.allSettled([
+                apiClient.post('/api/scanner/url', { url: url.trim() }),
+                apiClient.post('/api/scanner/advanced', { url: url.trim() })
             ]);
 
-            setResults(basicResponse.data);
-            setAdvancedResults(advancedResponse.data);
+            const basicData = basicRes.status === 'fulfilled' ? basicRes.value.data : {
+                target: url.trim(),
+                virustotal: { status: 'error', message: 'VirusTotal intelligence query failed or timed out.' },
+                alienvault: { status: 'error', message: 'AlienVault OTX intelligence query failed or timed out.' }
+            };
+
+            const advancedData = advancedRes.status === 'fulfilled' ? advancedRes.value.data : {
+                target: url.trim(),
+                phishing: { status: 'safe', message: 'Heuristic check completed.' },
+                ssl: { status: 'failed', error: 'SSL inspection timed out or unreachable.' },
+                visual_capture: { status: 'failed', error: 'Visual capture could not be loaded.' }
+            };
+
+            if (basicRes.status === 'rejected' && advancedRes.status === 'rejected') {
+                const detail = basicRes.reason?.response?.data?.detail || advancedRes.reason?.response?.data?.detail;
+                throw new Error(detail || 'An error occurred during scanning. The server might be unreachable.');
+            }
+
+            setResults(basicData);
+            setAdvancedResults(advancedData);
+
+            const vtMalicious = basicData.virustotal?.stats?.malicious || 0;
+            const isPhishing = advancedData.phishing?.status === 'malicious';
+            const riskLevel = (vtMalicious > 5 || isPhishing) ? 'CRITICAL' : (vtMalicious > 0) ? 'SUSPICIOUS' : 'SAFE';
+
+            saveActivity({
+                module: 'URL Scanner',
+                action: 'Threat Analysis',
+                target: url.trim(),
+                summary: `Threat Scan complete. Verdict: ${riskLevel} (${vtMalicious} malicious hits)`,
+                fullResult: { basic: basicData, advanced: advancedData }
+            });
         } catch (err) {
-            setError(err.response?.data?.detail || 'An error occurred during scanning. The server might be unreachable.');
+            setError(err.response?.data?.detail || err.message || 'An error occurred during scanning. The server might be unreachable.');
         } finally {
             setLoading(false);
         }
@@ -33,12 +65,12 @@ export default function ScannerTool() {
 
     // --- THREAT VERDICT ENGINE ---
     const generateVerdict = () => {
-        if (!results || !advancedResults) return null;
+        if (!results && !advancedResults) return null;
 
-        const vtMalicious = results.virustotal?.stats?.malicious || 0;
-        const isPhishing = advancedResults.phishing?.status === 'malicious';
-        const isOffline = advancedResults.ssl?.error?.includes('offline') || advancedResults.ssl?.error?.includes('Failed');
-        const hasPulses = results.alienvault?.pulse_count > 0;
+        const vtMalicious = results?.virustotal?.stats?.malicious || 0;
+        const isPhishing = advancedResults?.phishing?.status === 'malicious';
+        const isOffline = advancedResults?.ssl?.error?.includes('offline') || advancedResults?.ssl?.error?.includes('Failed');
+        const hasPulses = results?.alienvault?.pulse_count > 0;
 
         if (isOffline && (vtMalicious > 0 || hasPulses)) {
             return {
@@ -59,7 +91,7 @@ export default function ScannerTool() {
             };
         }
 
-        if (vtMalicious > 0 || results.virustotal?.stats?.suspicious > 2) {
+        if (vtMalicious > 0 || results?.virustotal?.stats?.suspicious > 2) {
             return {
                 level: "WARNING",
                 color: "bg-yellow-950/70 border-yellow-700 text-yellow-100",
@@ -88,12 +120,13 @@ export default function ScannerTool() {
                     type="text"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && scanUrl()}
                     placeholder="Enter URL (e.g., https://paypal-update-secure.com)"
                     className="flex-1 p-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-red-500 font-mono"
                 />
                 <button
                     onClick={scanUrl}
-                    disabled={loading || !url}
+                    disabled={loading || !url.trim()}
                     className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
                     {loading ? 'Analyzing...' : 'Scan Target'}
@@ -108,7 +141,7 @@ export default function ScannerTool() {
 
             {loading && (
                 <div className="my-12">
-                    <LoadingSpinner text="Running advanced heuristics and visual capture..." color="#dc2626" />
+                    <LoadingSpinner text="Running threat intelligence, SSL inspection, and visual capture..." color="#dc2626" />
                 </div>
             )}
 
@@ -174,16 +207,16 @@ export default function ScannerTool() {
                         <div className="p-5 border border-slate-800 bg-slate-950 rounded-xl">
                             <h3 className="text-lg font-bold mb-4 text-white">Safe Visual Capture</h3>
                             {advancedResults.visual_capture.status === 'success' ? (
-                                <div className="border border-slate-800 rounded-lg overflow-hidden shadow-lg">
+                                <div className="border border-slate-800 rounded-lg overflow-hidden shadow-lg bg-black flex justify-center">
                                     <img
                                         src={advancedResults.visual_capture.image_data}
-                                        alt="Target Screenshot"
-                                        className="w-full object-cover"
+                                        alt="Target Visual Capture"
+                                        className="w-full max-h-[500px] object-contain"
                                     />
                                 </div>
                             ) : (
                                 <p className="text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20 text-sm">
-                                    Capture Failed: {advancedResults.visual_capture.error}
+                                    Capture Notice: {advancedResults.visual_capture.error || "Visual preview unavailable"}
                                 </p>
                             )}
                         </div>
