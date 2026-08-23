@@ -7,8 +7,14 @@ from datetime import datetime
 from urllib.parse import urlparse
 import tldextract
 import Levenshtein
-from playwright.sync_api import sync_playwright
 import traceback
+
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+    sync_playwright = None
 
 # Dictionary of commonly spoofed brands
 HIGH_VALUE_TARGETS = [
@@ -123,23 +129,35 @@ async def async_ssl_inspect(url: str) -> dict:
 
 # --- 3. SAFE VISUAL CAPTURE ---
 def sync_capture_screenshot(url: str) -> dict:
-    """Runs synchronously in a background thread to bypass Windows async loop bugs."""
+    """Runs synchronously in a background thread with safe fallback if browser binary is absent."""
+    if not PLAYWRIGHT_AVAILABLE or sync_playwright is None:
+        return {
+            "status": "unavailable",
+            "message": "Headless browser preview is not enabled in this server environment."
+        }
+
     is_safe, error_reason = is_safe_public_url(url)
     if not is_safe:
         return {"status": "failed", "error": error_reason}
 
-    print(f"\n[DEBUG] 1. Starting threaded visual capture for: {url}")
     try:
         with sync_playwright() as p:
-            print("[DEBUG] 2. Sync Playwright initialized. Launching Chromium...")
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-infobars'
-                ]
-            )
+            try:
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars'
+                    ]
+                )
+            except Exception as launch_err:
+                return {
+                    "status": "unavailable",
+                    "message": "Chromium binary not found on host container. Visual capture skipped."
+                }
             
             fake_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             
@@ -150,28 +168,24 @@ def sync_capture_screenshot(url: str) -> dict:
             )
             page = context.new_page()
 
-            print("[DEBUG] 4. Page created. Navigating to URL...")
             try:
-                page.goto(url, timeout=15000, wait_until='domcontentloaded')
-                print("[DEBUG] 5. Navigation successful.")
-                page.wait_for_timeout(2000)
-            except Exception as nav_error:
-                print(f"[DEBUG] 5b. Navigation timeout, forcing screenshot: {nav_error}")
-                page.wait_for_timeout(2000)
+                page.goto(url, timeout=10000, wait_until='domcontentloaded')
+                page.wait_for_timeout(1000)
+            except Exception:
+                pass
             
-            print("[DEBUG] 6. Taking screenshot...")
-            screenshot_bytes = page.screenshot()
-            b64_image = base64.b64encode(screenshot_bytes).decode('utf-8')
-
-            print("[DEBUG] 7. Screenshot successful. Closing browser...")
-            browser.close()
-            return {"status": "success", "image_data": f"data:image/png;base64,{b64_image}"}
+            try:
+                screenshot_bytes = page.screenshot()
+                b64_image = base64.b64encode(screenshot_bytes).decode('utf-8')
+                browser.close()
+                return {"status": "success", "image_data": f"data:image/png;base64,{b64_image}"}
+            except Exception as e:
+                browser.close()
+                return {"status": "failed", "error": f"Screenshot capture failed: {str(e)}"}
             
     except Exception as e:
-        error_trace = traceback.format_exc()
-        print(f"\n[CRITICAL THREADED PLAYWRIGHT ERROR]\n{error_trace}\n")
-        error_msg = str(e) if str(e).strip() else "Unknown internal crash in thread."
-        return {"status": "failed", "error": error_msg}
+        error_msg = str(e) if str(e).strip() else "Visual capture encountered an unexpected issue."
+        return {"status": "unavailable", "message": error_msg}
 
 async def async_capture_screenshot(url: str) -> dict:
     """Wraps the sync Playwright function with a concurrency semaphore."""
