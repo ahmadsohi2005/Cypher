@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ShieldAlert,
@@ -35,10 +35,6 @@ export default function ScannerTool() {
     const [advancedResults, setAdvancedResults] = useState(null);
     const [error, setError] = useState('');
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/scanner`
-        : 'http://127.0.0.1:8000/api/scanner';
-
     const copyToClipboard = (text, key) => {
         if (!text) return;
         navigator.clipboard.writeText(text);
@@ -55,8 +51,8 @@ export default function ScannerTool() {
 
         try {
             const [basicResponse, advancedResponse] = await Promise.all([
-                axios.post(`${API_BASE}/url`, { url: url.trim() }),
-                axios.post(`${API_BASE}/advanced`, { url: url.trim() })
+                apiClient.post('/api/scanner/url', { url: url.trim() }),
+                apiClient.post('/api/scanner/advanced', { url: url.trim() })
             ]);
 
             setResults(basicResponse.data);
