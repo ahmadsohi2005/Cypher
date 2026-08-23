@@ -40,6 +40,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.core.rate_limiter import RateLimitMiddleware
+
+# Add in-memory rate limiting middleware (120 requests/minute per client)
+app.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60)
+
 # Register routers
 app.include_router(network_router)
 app.include_router(scanner_router)
