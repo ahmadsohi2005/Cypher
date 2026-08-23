@@ -1,9 +1,14 @@
 import base64
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.services import log_analyzer
+from app.core.auth import get_current_user
 
-router = APIRouter(prefix="/api/logs", tags=["Log Analyzer"])
+router = APIRouter(
+    prefix="/api/logs",
+    tags=["Log Analyzer"],
+    dependencies=[Depends(get_current_user)]
+)
 
 class LogRequest(BaseModel):
     raw_logs: str
