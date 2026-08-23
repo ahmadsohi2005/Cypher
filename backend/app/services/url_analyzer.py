@@ -2,63 +2,18 @@ import ssl
 import socket
 import asyncio
 import base64
-import ipaddress
 from datetime import datetime
 from urllib.parse import urlparse
 import tldextract
 import Levenshtein
+from playwright.sync_api import sync_playwright
 import traceback
-
-try:
-    from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
-    sync_playwright = None
 
 # Dictionary of commonly spoofed brands
 HIGH_VALUE_TARGETS = [
     "google", "microsoft", "paypal", "apple", 
     "amazon", "facebook", "netflix", "bankofamerica", "icloud"
 ]
-
-# Limit concurrent headless browser instances to prevent resource exhaustion (DoS)
-BROWSER_SEMAPHORE = asyncio.Semaphore(2)
-
-def is_safe_public_url(url: str) -> tuple[bool, str]:
-    """
-    Validates that a URL uses a valid scheme (http/https) and does not resolve
-    to private, loopback, link-local, or cloud metadata IP ranges (SSRF defense).
-    """
-    try:
-        if not url.startswith(('http://', 'https://')):
-            url = 'http://' + url
-            
-        parsed = urlparse(url)
-        if parsed.scheme not in ('http', 'https'):
-            return False, f"Unsupported URL scheme: {parsed.scheme}"
-            
-        hostname = parsed.hostname
-        if not hostname:
-            return False, "Invalid target hostname."
-            
-        hostname_clean = hostname.strip().lower()
-        if hostname_clean in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
-            return False, "Targeting local host addresses is restricted."
-            
-        # Resolve hostname and check IP against private/internal ranges
-        try:
-            ip_str = socket.gethostbyname(hostname_clean)
-            ip = ipaddress.ip_address(ip_str)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-                return False, "Access to private or local network resources is prohibited (SSRF Protection)."
-        except socket.gaierror:
-            # Cannot resolve domain via DNS
-            return False, "Target domain could not be resolved (DNS resolution failed)."
-            
-        return True, ""
-    except Exception as e:
-        return False, f"URL validation failed: {str(e)}"
 
 def extract_domain_name(url: str) -> str:
     """Uses the official Public Suffix List to perfectly extract the domain name."""
@@ -91,12 +46,8 @@ def check_typosquatting(url: str) -> dict:
 
 # --- 2. SSL/TLS INSPECTOR ---
 def sync_ssl_inspect(url: str) -> dict:
-    is_safe, error_reason = is_safe_public_url(url)
-    if not is_safe:
-        return {"status": "failed", "error": error_reason}
-
-    parsed = urlparse(url if url.startswith(('http://', 'https://')) else 'http://' + url)
-    hostname = parsed.hostname or parsed.netloc
+    parsed = urlparse(url)
+    hostname = parsed.netloc or parsed.path
 
     context = ssl.create_default_context()
     try:
@@ -129,35 +80,19 @@ async def async_ssl_inspect(url: str) -> dict:
 
 # --- 3. SAFE VISUAL CAPTURE ---
 def sync_capture_screenshot(url: str) -> dict:
-    """Runs synchronously in a background thread with safe fallback if browser binary is absent."""
-    if not PLAYWRIGHT_AVAILABLE or sync_playwright is None:
-        return {
-            "status": "unavailable",
-            "message": "Headless browser preview is not enabled in this server environment."
-        }
-
-    is_safe, error_reason = is_safe_public_url(url)
-    if not is_safe:
-        return {"status": "failed", "error": error_reason}
-
+    """Runs synchronously in a background thread to bypass Windows async loop bugs."""
+    print(f"\n[DEBUG] 1. Starting threaded visual capture for: {url}")
     try:
         with sync_playwright() as p:
-            try:
-                browser = p.chromium.launch(
-                    headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-infobars'
-                    ]
-                )
-            except Exception as launch_err:
-                return {
-                    "status": "unavailable",
-                    "message": "Chromium binary not found on host container. Visual capture skipped."
-                }
+            print("[DEBUG] 2. Sync Playwright initialized. Launching Chromium...")
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars'
+                ]
+            )
             
             fake_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             
@@ -168,26 +103,29 @@ def sync_capture_screenshot(url: str) -> dict:
             )
             page = context.new_page()
 
+            print("[DEBUG] 4. Page created. Navigating to URL...")
             try:
-                page.goto(url, timeout=10000, wait_until='domcontentloaded')
-                page.wait_for_timeout(1000)
-            except Exception:
-                pass
+                page.goto(url, timeout=15000, wait_until='domcontentloaded')
+                print("[DEBUG] 5. Navigation successful.")
+                page.wait_for_timeout(2000)
+            except Exception as nav_error:
+                print(f"[DEBUG] 5b. Navigation timeout, forcing screenshot: {nav_error}")
+                page.wait_for_timeout(2000)
             
-            try:
-                screenshot_bytes = page.screenshot()
-                b64_image = base64.b64encode(screenshot_bytes).decode('utf-8')
-                browser.close()
-                return {"status": "success", "image_data": f"data:image/png;base64,{b64_image}"}
-            except Exception as e:
-                browser.close()
-                return {"status": "failed", "error": f"Screenshot capture failed: {str(e)}"}
+            print("[DEBUG] 6. Taking screenshot...")
+            screenshot_bytes = page.screenshot()
+            b64_image = base64.b64encode(screenshot_bytes).decode('utf-8')
+
+            print("[DEBUG] 7. Screenshot successful. Closing browser...")
+            browser.close()
+            return {"status": "success", "image_data": f"data:image/png;base64,{b64_image}"}
             
     except Exception as e:
-        error_msg = str(e) if str(e).strip() else "Visual capture encountered an unexpected issue."
-        return {"status": "unavailable", "message": error_msg}
+        error_trace = traceback.format_exc()
+        print(f"\n[CRITICAL THREADED PLAYWRIGHT ERROR]\n{error_trace}\n")
+        error_msg = str(e) if str(e).strip() else "Unknown internal crash in thread."
+        return {"status": "failed", "error": error_msg}
 
 async def async_capture_screenshot(url: str) -> dict:
-    """Wraps the sync Playwright function with a concurrency semaphore."""
-    async with BROWSER_SEMAPHORE:
-        return await asyncio.to_thread(sync_capture_screenshot, url)
+    """Wraps the sync Playwright function in a background thread."""
+    return await asyncio.to_thread(sync_capture_screenshot, url)
