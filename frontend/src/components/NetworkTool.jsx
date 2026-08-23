@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../utils/apiClient';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity,
@@ -52,11 +52,6 @@ export default function NetworkTool() {
     const [macAddress, setMacAddress] = useState('');
     const [cidrInput, setCidrInput] = useState('192.168.1.0/24');
 
-    // Dynamic API routing for Vercel vs Localhost
-    const API_BASE = import.meta.env.VITE_API_BASE_URL
-        ? `${import.meta.env.VITE_API_BASE_URL}/api/network`
-        : 'http://127.0.0.1:8000/api/network';
-
     // Reset states when switching tabs to prevent UI freeze
     useEffect(() => {
         setLoading(false);
@@ -76,7 +71,7 @@ export default function NetworkTool() {
         setError('');
         setResults(null);
         try {
-            const response = await axios.post(`${API_BASE}/${endpoint}`, payload, {
+            const response = await apiClient.post(`/api/network/${endpoint}`, payload, {
                 timeout: 25000
             });
             setResults(response.data);
