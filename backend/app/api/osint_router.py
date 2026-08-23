@@ -1,8 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from app.services import osint_analyzer
+from app.core.auth import get_current_user
 
-router = APIRouter(prefix="/api/osint", tags=["OSINT"])
+router = APIRouter(
+    prefix="/api/osint",
+    tags=["OSINT"],
+    dependencies=[Depends(get_current_user)]
+)
 
 class OsintRequest(BaseModel):
     target: str
