@@ -51,7 +51,8 @@ def sync_ssl_inspect(url: str) -> dict:
 
     context = ssl.create_default_context()
     try:
-        with socket.create_connection((hostname, 443), timeout=5) as sock:
+        # INCREASED TIMEOUT TO 10 SECONDS FOR CLOUD ROUTING
+        with socket.create_connection((hostname, 443), timeout=10) as sock:
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                 cert = ssock.getpeercert()
 
@@ -68,15 +69,17 @@ def sync_ssl_inspect(url: str) -> dict:
                     "days_remaining": days_remaining,
                     "expires": expire_date.strftime("%Y-%m-%d")
                 }
+                
+    except ssl.SSLCertVerificationError:
+        # CATCHES UNTRUSTED/EXPIRED CERTS GRACEFULLY
+        return {"status": "failed", "error": "INVALID_CERT: The site's certificate is expired, self-signed, or untrusted."}
+    except socket.timeout:
+        return {"status": "failed", "error": "SSL inspection timed out. The server might be unreachable."}
     except socket.gaierror:
-        # This catches the 11001 getaddrinfo error specifically
         return {"status": "failed", "error": "Domain is offline or sinkholed (DNS Resolution Failed)."}
     except Exception as e:
         return {"status": "failed", "error": f"SSL Handshake failed: {str(e)}"}
 
-async def async_ssl_inspect(url: str) -> dict:
-    """Wraps the blocking SSL check in a background thread."""
-    return await asyncio.to_thread(sync_ssl_inspect, url)
 
 # --- 3. SAFE VISUAL CAPTURE ---
 def sync_capture_screenshot(url: str) -> dict:
@@ -89,6 +92,10 @@ def sync_capture_screenshot(url: str) -> dict:
                 headless=True,
                 args=[
                     '--no-sandbox',
+                    '--disable-setuid-sandbox',        # REQUIRED FOR DOCKER
+                    '--disable-dev-shm-usage',         # FIXES OUT-OF-MEMORY CRASHES
+                    '--disable-gpu',                   # CLOUD SERVERS HAVE NO GPU
+                    '--single-process',                # REDUCES CONTAINER OVERHEAD
                     '--disable-blink-features=AutomationControlled',
                     '--disable-infobars'
                 ]
@@ -125,7 +132,3 @@ def sync_capture_screenshot(url: str) -> dict:
         print(f"\n[CRITICAL THREADED PLAYWRIGHT ERROR]\n{error_trace}\n")
         error_msg = str(e) if str(e).strip() else "Unknown internal crash in thread."
         return {"status": "failed", "error": error_msg}
-
-async def async_capture_screenshot(url: str) -> dict:
-    """Wraps the sync Playwright function in a background thread."""
-    return await asyncio.to_thread(sync_capture_screenshot, url)
