@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Shield, ShieldAlert, Activity, Search, FileText, ArrowLeft, Clock, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import NetworkTool from './components/NetworkTool';
@@ -7,8 +7,11 @@ import OsintTool from './components/OsintTool';
 import LogAnalyzer from './components/LogAnalyzer';
 import ActivitySidebar from './components/ActivitySidebar';
 import Auth from './components/Auth';
+import ResetPasswordModal from './components/ResetPasswordModal';
 import { getHistory, clearHistory } from './utils/historyManager';
 import { supabase } from './utils/supabaseClient';
+
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -16,18 +19,71 @@ export default function App() {
   const [time, setTime] = useState(new Date());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [historyData, setHistoryData] = useState([]);
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState('');
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
 
+  const lastActivityRef = useRef(Date.now());
+
+  // Handle automatic logout on inactivity
+  const handleInactivityLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setSessionExpiredMsg('Security policy enforced: Session expired due to 30 minutes of inactivity.');
+  }, []);
+
+  // Update last activity timestamp on user interactions
+  const recordActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  // Initial Auth & Recovery listeners
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResetPasswordOpen(true);
+      }
+      setSession(newSession);
     });
+
+    // Check if URL hash contains recovery token
+    if (window.location.hash && window.location.hash.includes('type=recovery')) {
+      setIsResetPasswordOpen(true);
+    }
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // 30-Minute Inactivity Watcher
+  useEffect(() => {
+    if (!session) return;
+
+    // Reset last activity timer upon login
+    lastActivityRef.current = Date.now();
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, recordActivity, { passive: true });
+    });
+
+    // Check inactivity periodically
+    const inactivityInterval = setInterval(() => {
+      const now = Date.now();
+      if (now - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+        handleInactivityLogout();
+      }
+    }, 15000); // check every 15 seconds
+
+    return () => {
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, recordActivity);
+      });
+      clearInterval(inactivityInterval);
+    };
+  }, [session, handleInactivityLogout, recordActivity]);
 
   useEffect(() => {
     if (isSidebarOpen && session?.user?.id) {
@@ -43,7 +99,9 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    setSessionExpiredMsg('');
     await supabase.auth.signOut();
+    setSession(null);
   };
 
   const handleSelectEntry = (entry) => {
@@ -100,7 +158,24 @@ export default function App() {
   ];
 
   if (!session) {
-    return <Auth onLogin={(newSession) => setSession(newSession)} />;
+    return (
+      <>
+        <Auth
+          onLogin={(newSession) => {
+            setSessionExpiredMsg('');
+            setSession(newSession);
+          }}
+          sessionExpiredMessage={sessionExpiredMsg}
+        />
+        <ResetPasswordModal
+          isOpen={isResetPasswordOpen}
+          onClose={() => setIsResetPasswordOpen(false)}
+          onSuccess={() => {
+            setIsResetPasswordOpen(false);
+          }}
+        />
+      </>
+    );
   }
 
   return (
@@ -116,7 +191,7 @@ export default function App() {
             <div className="p-2 bg-blue-500/10 rounded border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
               <Shield className="w-6 h-6 text-blue-400" />
             </div>
-            <h1 className="text-xl font-bold tracking-widest text-white">CYPHER</h1>
+            <h1 className="text-xl font-bold tracking-widest text-white font-mono">CYPHER</h1>
           </div>
 
           <div className="flex items-center gap-4">
@@ -128,7 +203,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsSidebarOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 hover:border-slate-700 text-sm font-semibold transition-all shadow-md"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800 hover:border-slate-700 text-sm font-semibold transition-all shadow-md font-mono"
               >
                 <Clock className="w-4 h-4 text-blue-400" />
                 <span className="hidden sm:inline">Activity Log</span>
@@ -136,10 +211,11 @@ export default function App() {
 
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/40 text-red-400 rounded border border-red-900/50 text-sm font-semibold transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 bg-red-950/30 hover:bg-red-900/40 text-red-400 rounded border border-red-900/50 text-sm font-semibold transition-all font-mono"
                 title="Sign Out"
               >
                 <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </div>
@@ -159,7 +235,7 @@ export default function App() {
               className="w-full"
             >
               <div className="mb-10">
-                <h2 className="text-3xl font-bold text-white tracking-wide">SYSTEM MODULES</h2>
+                <h2 className="text-3xl font-bold text-white tracking-wide font-mono">SYSTEM MODULES</h2>
                 <p className="text-slate-400 mt-2 font-mono text-sm">Awaiting directive. Select a tool to initialize scan.</p>
               </div>
 
@@ -194,7 +270,7 @@ export default function App() {
                         )}
                       </div>
 
-                      <h3 className="text-xl font-bold text-white tracking-wide mb-1 group-hover:text-white transition-colors">
+                      <h3 className="text-xl font-bold text-white tracking-wide mb-1 group-hover:text-white transition-colors font-mono">
                         {tool.name}
                       </h3>
                       <p className="text-sm text-slate-500 italic mb-6">
@@ -253,6 +329,12 @@ export default function App() {
         history={historyData}
         onClear={handleClearHistory}
         onSelectEntry={handleSelectEntry}
+      />
+
+      <ResetPasswordModal
+        isOpen={isResetPasswordOpen}
+        onClose={() => setIsResetPasswordOpen(false)}
+        onSuccess={() => setIsResetPasswordOpen(false)}
       />
     </div>
   );
