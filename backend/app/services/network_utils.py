@@ -96,7 +96,7 @@ async def check_port_with_banner(ip: str, port: int) -> dict:
                 service_name = "UNKNOWN"
 
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(ip, port), timeout=0.5
+                asyncio.open_connection(ip, port), timeout=1.0
             )
             banner = await grab_banner(reader, writer)
             writer.close()
@@ -108,7 +108,7 @@ async def check_port_with_banner(ip: str, port: int) -> dict:
 async def async_port_scan(target: str, ports: list) -> list:
     clean_host = sanitize_target(target)
     results = []
-    chunk_size = 200 
+    chunk_size = 100 
     
     for i in range(0, len(ports), chunk_size):
         chunk = ports[i:i+chunk_size]
