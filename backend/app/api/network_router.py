@@ -1,9 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict, Any
 from app.services import network_utils
+from app.core.auth import get_current_user
 
-router = APIRouter(prefix="/api/network", tags=["Network Utilities"])
+router = APIRouter(
+    prefix="/api/network",
+    tags=["Network Utilities"],
+    dependencies=[Depends(get_current_user)]
+)
 
 class TargetRequest(BaseModel):
     target: str
